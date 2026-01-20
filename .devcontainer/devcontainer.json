@@ -1,0 +1,51 @@
+{
+  "name": "Claude Code Dev",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "remoteUser": "vscode",
+
+  // Claude Code config persistence
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+  },
+
+  "mounts": [
+    "source=claude-config-${devcontainerId},target=/home/vscode/.claude,type=volume"
+  ],
+
+  // Memory: 8GB+ recommended for Claude Code
+  "runArgs": ["--memory=8g", "--memory-swap=8g"],
+
+  // Setup script (runs once on container creation)
+  "postCreateCommand": "bash .devcontainer/scripts/setup.sh",
+
+  // Version check (runs on every container start)
+  "postStartCommand": "bash .devcontainer/scripts/version-check.sh 2>/dev/null || true",
+
+  // Environment variables
+  "remoteEnv": {
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+    "GITHUB_TOKEN": "${localEnv:GH_TOKEN}",
+    "ENABLE_TOOL_SEARCH": "true",
+    "WORKSPACE_FOLDER": "${containerWorkspaceFolder}"
+  },
+
+  // VS Code extensions (minimal)
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "eamodio.gitlens",
+        "usernamehw.errorlens"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // Features: GitHub CLI + Node.js (Claude Code is installed in setup.sh for user-local control)
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": {}
+  }
+}

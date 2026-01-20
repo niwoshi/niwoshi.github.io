@@ -1,0 +1,101 @@
+{
+  "_comment": "テンプレート用デフォルト設定。運用時はpermissionsを絞ることを推奨。",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-start.sh 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-edit-check.sh 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[hook:warn] File modified - ensure spec alignment'"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-ui-requirements.sh 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[hook:info] Session ending - remember to update tasks.md if needed'"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(make *)",
+      "Bash(git *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Read",
+      "Write",
+      "Edit"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(rm -r *)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Bash(curl * | bash)",
+      "Bash(curl * | sh)",
+      "Bash(wget * | bash)",
+      "Bash(wget * | sh)"
+    ]
+  },
+  "env": {
+    "CC_SDD_ENABLED": "true",
+    "RALPH_ENABLED": "true"
+  },
+  "_experimental": {
+    "_comment": "以下は実験的/カスタム設定。公式ドキュメントに記載なし。動作しない可能性あり。",
+    "marketplaces": [
+      {
+        "name": "claude-plugins-official",
+        "source": "github.com/anthropics/claude-plugins-official"
+      }
+    ],
+    "plugins": {
+      "code-simplifier": "enabled"
+    },
+    "milestone_review": {
+      "complexity_threshold": 10,
+      "loc_threshold": 50,
+      "duplication_threshold": 10,
+      "auto_simplify": false
+    }
+  }
+}
