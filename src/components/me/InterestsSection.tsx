@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { Wine, Tv, Bike, Waves, Music, Cpu } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const interests = [
   {
@@ -54,6 +54,24 @@ interface InterestCardProps {
 
 function InterestCard({ interest, index }: InterestCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardSize, setCardSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (cardRef.current) {
+      const updateSize = () => {
+        if (cardRef.current) {
+          setCardSize({
+            width: cardRef.current.offsetWidth,
+            height: cardRef.current.offsetHeight,
+          });
+        }
+      };
+      updateSize();
+      window.addEventListener('resize', updateSize);
+      return () => window.removeEventListener('resize', updateSize);
+    }
+  }, []);
 
   // Calculate radial positions for keywords
   const getKeywordPosition = (keywordIndex: number, total: number) => {
@@ -65,13 +83,23 @@ function InterestCard({ interest, index }: InterestCardProps) {
     };
   };
 
+  // Get SVG line end coordinates (absolute pixel values)
+  const getLineEndPosition = (keywordIndex: number, total: number) => {
+    const pos = getKeywordPosition(keywordIndex, total);
+    return {
+      x: cardSize.width / 2 + pos.x,
+      y: cardSize.height / 2 + pos.y,
+    };
+  };
+
   return (
     <motion.div
+      ref={cardRef}
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
-      whileHover={{ 
+      whileHover={{
         scale: 1.02,
         boxShadow: `0 0 20px ${interest.color}40`,
       }}
@@ -134,19 +162,19 @@ function InterestCard({ interest, index }: InterestCardProps) {
       </div>
 
       {/* Expanded keywords - positioned in the center of the card */}
-      {interest.keywords.length > 0 && (
+      {interest.keywords.length > 0 && cardSize.width > 0 && (
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
           {/* Connection lines - one SVG for all lines */}
           <svg className="absolute inset-0 w-full h-full overflow-visible">
             {interest.keywords.map((keyword, keywordIndex) => {
-              const pos = getKeywordPosition(keywordIndex, interest.keywords.length);
+              const endPos = getLineEndPosition(keywordIndex, interest.keywords.length);
               return (
                 <motion.line
                   key={`line-${keyword}`}
-                  x1="50%"
-                  y1="50%"
-                  x2={`calc(50% + ${pos.x}px)`}
-                  y2={`calc(50% + ${pos.y}px)`}
+                  x1={cardSize.width / 2}
+                  y1={cardSize.height / 2}
+                  x2={endPos.x}
+                  y2={endPos.y}
                   stroke={interest.color}
                   strokeWidth="1"
                   initial={{ pathLength: 0, opacity: 0 }}
