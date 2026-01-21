@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { GridBackground } from '../components/me/GridBackground';
+import { CircuitPattern } from '../components/me/CircuitPattern';
+import { HeroSection } from '../components/me/HeroSection';
+import { InterestsSection } from '../components/me/InterestsSection';
+import { FollowSection } from '../components/me/FollowSection';
+import { RecentSection } from '../components/me/RecentSection';
+import { Footer } from '../components/me/Footer';
+---
+
+<Layout title="niwoshi | me">
+  <div class="min-h-screen bg-[#0d1117] text-white relative overflow-hidden">
+    <!-- Background layers -->
+    <GridBackground client:load />
+    <CircuitPattern client:load />
+
+    <!-- Main content -->
+    <main class="relative z-10">
+      <HeroSection client:load />
+      <InterestsSection client:load />
+      <FollowSection client:load />
+      <RecentSection client:load />
+    </main>
+
+    <!-- Footer -->
+    <Footer client:load />
+  </div>
+</Layout>
