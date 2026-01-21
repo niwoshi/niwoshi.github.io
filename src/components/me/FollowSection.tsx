@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Twitter, Instagram } from "lucide-react";
+import { Twitter, Instagram, Star } from "lucide-react";
 
 const socialLinks = [
   {
@@ -7,14 +7,21 @@ const socialLinks = [
     label: "近況・雑談",
     platform: "X",
     color: "#00d4ff",
-    href: "#",
+    href: "https://x.com/ysmn_deus",
   },
   {
     icon: Instagram,
     label: "写真",
     platform: "Instagram",
     color: "#00ff88",
-    href: "#",
+    href: "https://www.instagram.com/ysmn_deus/",
+  },
+  {
+    icon: Star,
+    label: "ファンクラブ",
+    platform: "hololive fc",
+    color: "#ffb000",
+    href: "https://hololive-fc.hololivepro.com/h/profiles/radnpzpv",
   },
 ];
 
@@ -36,7 +43,7 @@ export function FollowSection() {
         </motion.div>
 
         {/* Social links */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {socialLinks.map((social, index) => (
             <motion.a
               key={social.platform}
