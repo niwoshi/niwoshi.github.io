@@ -1,0 +1,33 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { DevBackground } from '../components/dev/DevBackground';
+import { HeroSection } from '../components/dev/HeroSection';
+import { CapabilitiesSection } from '../components/dev/CapabilitiesSection';
+import { StanceSection } from '../components/dev/StanceSection';
+import { UseCasesSection } from '../components/dev/UseCasesSection';
+import { WorksSection } from '../components/dev/WorksSection';
+import { LinksSection } from '../components/dev/LinksSection';
+import { ContactSection } from '../components/dev/ContactSection';
+import { DevFooter } from '../components/dev/DevFooter';
+---
+
+<Layout title="niwoshi | dev" description="ysmn_deus - 電子回路設計から組み込みファームウェア、ソフトウェア開発まで一気通貫で支援">
+  <div class="min-h-screen bg-white text-gray-900 font-mono relative overflow-x-hidden">
+    <!-- Background layers -->
+    <DevBackground client:load />
+
+    <!-- Main content -->
+    <main class="relative z-10">
+      <HeroSection client:load />
+      <CapabilitiesSection client:load />
+      <StanceSection client:load />
+      <UseCasesSection client:load />
+      <WorksSection client:load />
+      <LinksSection client:load />
+      <ContactSection client:load />
+    </main>
+
+    <!-- Footer -->
+    <DevFooter client:load />
+  </div>
+</Layout>

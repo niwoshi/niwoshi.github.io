@@ -66,7 +66,7 @@ export function Footer() {
 
             {/* /dev link */}
             <motion.a
-              href="#"
+              href="/dev"
               className="group relative flex items-center gap-2 px-4 py-2 bg-[#161b22] border-2 border-gray-800 rounded-lg hover:border-[#00d4ff] transition-all duration-300"
               whileHover={{ 
                 scale: 1.05,

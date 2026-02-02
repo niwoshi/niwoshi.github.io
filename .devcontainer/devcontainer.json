@@ -42,6 +42,9 @@
     }
   },
 
+  // Port forwarding for dev server
+  "forwardPorts": [4321],
+
   // Features: GitHub CLI + Node.js (Claude Code is installed in setup.sh for user-local control)
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
