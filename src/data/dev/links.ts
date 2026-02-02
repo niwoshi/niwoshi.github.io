@@ -26,4 +26,4 @@ export const links: Link[] = [
   },
 ];
 
-export const contactFormUrl = "https://docs.google.com/forms/d/e/your-form-id/viewform";
+export const contactFormUrl = "https://forms.gle/uEDacT8shB3A9MLGA";
