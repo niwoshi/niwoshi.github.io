@@ -40,6 +40,26 @@
   }
   @media(max-width:800px){ .profiles{border-left:0; border-top:1px solid var(--rule)} }
 
+  /* ---- タブ（狭い画面でのみ表示）---- */
+  .tabs{display:none}
+  .profiles.single .tabs{
+    display:flex; position:sticky; top:0; z-index:2;
+    background:#fff; border-bottom:1px solid var(--rule);
+  }
+  .tab{
+    flex:1; appearance:none; border:0; background:none; cursor:pointer;
+    padding:10px 6px 8px; font:inherit; color:var(--muted);
+    border-bottom:3px solid transparent; transition:color .15s, border-color .15s;
+  }
+  .tab .t-nm{display:block; font-size:12.5px; font-weight:700; letter-spacing:.02em}
+  .tab .t-mt{display:block; font-size:10px; margin-top:2px; font-variant-numeric:tabular-nums}
+  .tab[aria-selected="true"]{color:var(--ink)}
+  .tab:focus-visible{outline:2px solid var(--ink); outline-offset:-3px}
+
+  /* 1コース表示モード：選択中以外を隠す */
+  .profiles.single .course{display:none}
+  .profiles.single .course.sel{display:block; border-bottom:0}
+
   .course{padding:12px 16px 10px; border-bottom:1px solid var(--rule)}
   .course:last-of-type{border-bottom:0}
   .head{display:flex; align-items:baseline; gap:9px; margin-bottom:2px}
@@ -64,8 +84,9 @@
 <div class="app">
   <div id="map"></div>
 
-  <div class="profiles">
-    <div class="hint">標高グラフをなぞると、左の地図にその地点が表示されます</div>
+  <div class="profiles" id="profiles">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="hint" id="hint">標高グラフをなぞると、左の地図にその地点が表示されます</div>
     <div id="stack"></div>
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
@@ -241,17 +262,64 @@ for(const k of ORDER){
   svg.addEventListener('pointerleave', clearAll);
 }
 
-// ===== サイズ確定後に全コースへフィット ==============================
+// ===== レイアウト切替（CSSの @media と同じ値を使う）==================
+const BREAKPOINT = 800;                     // ← CSS側の 800px と必ず揃える
+const mq = window.matchMedia(`(max-width:${BREAKPOINT}px)`);
+const profiles = document.getElementById('profiles');
+const tabs = document.getElementById('tabs');
+let selected = 'expert';                    // 1コース表示モードでの選択状態
+
+// タブを生成
+for(const k of ORDER){
+  const c=COURSES[k];
+  const b=document.createElement('button');
+  b.className='tab'; b.type='button'; b.role='tab'; b.dataset.c=k;
+  b.style.setProperty('--c', c.color);
+  b.innerHTML=`<span class="t-nm">${c.label}</span><span class="t-mt">${c.official}</span>`;
+  b.addEventListener('click', ()=>{ selected=k; applyMode(); });
+  tabs.appendChild(b);
+}
+
+function applyMode(){
+  const single = mq.matches;
+  profiles.classList.toggle('single', single);
+
+  document.querySelectorAll('.tab').forEach(t=>{
+    const on = single && t.dataset.c===selected;
+    t.setAttribute('aria-selected', on);
+    t.style.borderBottomColor = on ? COURSES[t.dataset.c].color : 'transparent';
+  });
+  document.querySelectorAll('.course').forEach(el=>{
+    el.classList.toggle('sel', el.dataset.c===selected);
+  });
+
+  document.getElementById('hint').textContent = single
+    ? 'コースを選び、標高グラフをなぞると地図に地点が表示されます'
+    : '標高グラフをなぞると、左の地図にその地点が表示されます';
+
+  // 1コース表示のときは、その1本だけを地図に残す
+  for(const k of ORDER){
+    if(single && k!==selected) map.removeLayer(lines[k]);
+    else if(!map.hasLayer(lines[k])) lines[k].addTo(map);
+  }
+  clearAll();
+  fit();
+}
+
+mq.addEventListener('change', applyMode);
+
+// ===== サイズ確定後に地図をフィット ==================================
 function fit(){
   const el=document.getElementById('map');
   if(!el.clientWidth || !el.clientHeight) return;
   map.invalidateSize({animate:false});
-  const all=L.featureGroup(ORDER.map(k=>lines[k]));
-  map.fitBounds(all.getBounds(), {padding:[24,24]});
+  const shown = mq.matches ? [lines[selected]] : ORDER.map(k=>lines[k]);
+  map.fitBounds(L.featureGroup(shown).getBounds(), {padding:[24,24]});
 }
 new ResizeObserver(fit).observe(document.getElementById('map'));
 window.addEventListener('load', fit);
 window.addEventListener('resize', fit);
+applyMode();
 requestAnimationFrame(fit);
 setTimeout(fit, 300);
 </script>
