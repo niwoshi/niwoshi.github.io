@@ -75,6 +75,7 @@
   .chart{width:100%; height:auto; display:block; touch-action:none; cursor:crosshair}
   .chart .grid{stroke:var(--rule); stroke-width:.5}
   .chart .axis{font-size:9px; fill:var(--muted); font-variant-numeric:tabular-nums}
+  .chart .unit{font-size:8.5px; letter-spacing:.08em; fill:var(--muted); opacity:.85}
 
   .foot{padding:10px 16px 12px; font-size:9.5px; line-height:1.7; color:var(--muted); border-top:1px solid var(--rule)}
   .foot a{color:inherit}
@@ -165,7 +166,7 @@ const cursor = L.marker([0,0], {
 }).addTo(map);
 
 // ===== 3つの標高グラフを生成 =========================================
-const W=600, H=132, M={t:10,r:10,b:22,l:40};
+const W=600, H=144, M={t:10,r:12,b:34,l:50};
 const stack=document.getElementById('stack');
 
 for(const k of ORDER){
@@ -187,7 +188,7 @@ for(const k of ORDER){
   }
   for(let i=0;i<=5;i++){
     const km=c.total*i/5;
-    g+=`<text class="axis" x="${c.X(km).toFixed(1)}" y="${H-M.b+14}" text-anchor="middle">${km.toFixed(1)}</text>`;
+    g+=`<text class="axis" x="${c.X(km).toFixed(1)}" y="${H-M.b+13}" text-anchor="middle">${km.toFixed(1)}</text>`;
   }
 
   const el=document.createElement('div');
@@ -207,8 +208,9 @@ for(const k of ORDER){
        <path d="${d}" fill="none" stroke="${c.color}" stroke-width="1.5" stroke-linejoin="round"/>
        <line class="vline" x1="0" x2="0" y1="${M.t}" y2="${H-M.b}" stroke="${c.color}" stroke-width="1" style="display:none"/>
        <circle class="cdot" r="4.5" fill="${c.color}" stroke="#fff" stroke-width="2" style="display:none"/>
-       <text class="axis" x="${W-M.r}" y="${H-3}" text-anchor="end">km</text>
-       <text class="axis" x="${M.l-6}" y="${M.t+2}" text-anchor="end">m</text>
+       <text class="axis unit" x="${(M.l+(W-M.r))/2}" y="${H-4}" text-anchor="middle">距離 (km)</text>
+       <text class="axis unit" text-anchor="middle"
+             transform="translate(11,${(M.t+(H-M.b))/2}) rotate(-90)">標高 (m)</text>
      </svg>`;
   stack.appendChild(el);
 }
