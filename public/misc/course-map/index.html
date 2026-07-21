@@ -158,15 +158,34 @@
   .pvbar button.pri{background:var(--ink); color:#fff}
   .pvbar button:disabled{opacity:.5; cursor:progress}
 
-  /* プレビュー中の地図は A4横と同じ縦横比（285:198）にする */
-  body.preview .app{display:block; height:auto}
-  body.preview .profiles{display:none}
-  body.preview #map{
+  /* プレビュー中の枠は、出力レイアウトと同じ縦横比にする */
+  body.preview .app{
     position:fixed; top:64px; left:0; right:0; margin:0 auto; z-index:50;
     width:min(94vw, calc((100vh - 84px) * 1.5833));
     aspect-ratio:285 / 180; height:auto; min-height:0;
+    display:grid; grid-template-columns:1fr; background:#fff; overflow:hidden;
     border:1px solid var(--rule); box-shadow:0 4px 24px rgba(0,0,0,.18);
   }
+  body.preview .profiles{display:none}
+  body.preview #map{position:static; width:auto; height:100%; min-height:0; border:0; box-shadow:none}
+
+  /* 地図＋標高グラフのレイアウトを選んだとき */
+  body.preview.full .app{
+    width:min(94vw, calc((100vh - 84px) * 1.7778));
+    aspect-ratio:16 / 9; grid-template-columns:56% 44%;
+  }
+  body.preview.full .profiles{display:flex; overflow:hidden; border-left:1px solid var(--rule)}
+  body.preview.full .tabs,
+  body.preview.full .hint,
+  body.preview.full .actions,
+  body.preview.full .aidtable,
+  body.preview.full .foot,
+  body.preview.full .live{display:none}
+  body.preview.full #stack{display:flex; flex-direction:column; height:100%; width:100%}
+  body.preview.full .course{flex:1; display:flex; flex-direction:column; justify-content:center;
+                            padding:6px 12px; border-bottom:1px solid #eceadf}
+  body.preview.full .course:last-child{border-bottom:0}
+  body.preview.full .chart{max-height:100%}
 
   .poi-lg{
     min-width:56px; height:40px; padding:0 11px; border-radius:20px;
@@ -188,6 +207,8 @@
 
     .app{
       display:block; height:auto; min-height:0; width:auto;
+      position:static !important; aspect-ratio:auto !important;
+      border:0 !important; box-shadow:none !important;
       overflow:hidden; page-break-after:avoid; break-after:avoid;
     }
     #map{
@@ -218,10 +239,16 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v8</small></span>
+  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v12</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
   <span class="pvspace"></span>
+  <label class="pvchk">レイアウト
+    <select id="png-layout">
+      <option value="map" selected>地図のみ（A4横）</option>
+      <option value="full">地図＋標高グラフ（16:9）</option>
+    </select>
+  </label>
   <label class="pvchk">解像度
     <select id="png-size">
       <option value="3300">高（3300px・印刷用 約294dpi）</option>
@@ -249,7 +276,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v8：埋め込みモード対応］</b>
+      <b style="color:var(--ink)">［build v12：出力の文字サイズ調整］</b>
     </div>
   </div>
 </div>
@@ -649,11 +676,22 @@ function paintPreview(){
   }
 }
 
+// プレビュー枠を出力レイアウトに合わせる
+function syncLayout(){
+  const full = document.getElementById('png-layout').value === 'full';
+  document.body.classList.toggle('full', full);
+  if(previewing){
+    requestAnimationFrame(()=>{ map.invalidateSize({animate:false}); paintPreview(); });
+  }
+}
+document.getElementById('png-layout').addEventListener('change', syncLayout);
+
 // ----- プレビューを開く -----------------------------------------------
 document.getElementById('btn-preview').addEventListener('click', ()=>{
   previewing = true;
   clearAll();
   document.body.classList.add('preview');
+  syncLayout();
   requestAnimationFrame(()=>{ map.invalidateSize({animate:false}); paintPreview(); });
 });
 
@@ -662,7 +700,7 @@ function closePreview(){
   if(!previewing) return;
   previewing = false;
   document.body.classList.remove('preview');
-  document.body.classList.remove('printing');
+  document.body.classList.remove('full');
   applyMode();
 }
 document.getElementById('btn-close').addEventListener('click', closePreview);
@@ -694,11 +732,118 @@ function loadTile(url){
   });
 }
 
+// 角丸矩形（canvas）
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h); ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r); ctx.arcTo(x, y, x+r, y, r); ctx.closePath();
+}
+
+// 標高プロファイルを canvas に描く（画面のSVG版と同じ体裁）
+function drawProfile(ctx, k, ox, oy, w, h, showBadge){
+  const c = COURSES[k];
+  const f  = Math.max(7, h*0.060);          // 基本フォント
+  const pl = ox + w*0.150, pr = ox + w*0.985;   // Y軸ラベル用に左を広く
+  const pt = oy + h*0.40,  pb = oy + h*0.74;    // バッジ行と軸ラベル用の余白
+  const lo = Math.floor(c.min/50)*50, hi = Math.ceil(c.max/50)*50;
+  const X  = km => pl + (km/c.total)*(pr-pl);
+  const Yv = e  => pb - ((e-lo)/(hi-lo))*(pb-pt);
+
+  // 見出し（色見本＋コース名）
+  ctx.fillStyle = c.color;
+  roundRect(ctx, ox+w*0.005, oy+h*0.105, w*0.026, Math.max(2, h*0.022), Math.max(1, h*0.011));
+  ctx.fill();
+  ctx.fillStyle = '#17241d';
+  ctx.font = `700 ${(f*1.15).toFixed(1)}px "Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(c.label, ox + w*0.042, oy + h*0.115);
+
+  // Y軸グリッド
+  ctx.strokeStyle = '#d3d0c2'; ctx.lineWidth = Math.max(0.6, w/1500);
+  ctx.fillStyle = '#6d7a71';
+  ctx.font = `${f.toFixed(1)}px "Hiragino Kaku Gothic ProN",sans-serif`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for(let i=0;i<=4;i++){
+    const e = lo + (hi-lo)*i/4, y = Yv(e);
+    ctx.beginPath(); ctx.moveTo(pl, y); ctx.lineTo(pr, y); ctx.stroke();
+    ctx.fillText(String(Math.round(e)), pl - w*0.018, y);
+  }
+
+  // 面と線
+  const trace = () => {
+    ctx.beginPath();
+    c.pts.forEach((p,i)=>{
+      const px=X(p.dist/1000), py=Yv(p.ele);
+      i ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+    });
+  };
+  trace();
+  ctx.lineTo(X(c.total), pb); ctx.lineTo(pl, pb); ctx.closePath();
+  ctx.globalAlpha = 0.15; ctx.fillStyle = c.color; ctx.fill(); ctx.globalAlpha = 1;
+  trace();
+  ctx.strokeStyle = c.color; ctx.lineWidth = Math.max(1, w/650);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+
+  // X軸ラベル
+  ctx.fillStyle = '#6d7a71';
+  ctx.font = `${f.toFixed(1)}px "Hiragino Kaku Gothic ProN",sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(let i=0;i<=5;i++){
+    const km = c.total*i/5;
+    ctx.fillText(km.toFixed(1), X(km), pb + h*0.035);
+  }
+
+  // 軸の単位
+  ctx.font = `${(f*0.92).toFixed(1)}px "Hiragino Kaku Gothic ProN",sans-serif`;
+  ctx.fillText('距離 (km)', (pl+pr)/2, pb + h*0.145);
+  ctx.save();
+  ctx.translate(ox + w*0.032, (pt+pb)/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('標高 (m)', 0, 0);
+  ctx.restore();
+
+  // 地点バッジ
+  if(showBadge){
+    const bh = h*0.085;
+    for(const p of poisOf(k)){
+      const info = p.courses[k], t = POI_TYPES[p.type];
+      const px = X(info.km);
+      ctx.strokeStyle = t.color; ctx.lineWidth = Math.max(0.8, w/1300);
+      ctx.setLineDash([w/200, w/280]);
+      ctx.beginPath(); ctx.moveTo(px, pt - bh*0.1); ctx.lineTo(px, pb); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = `700 ${(bh*0.58).toFixed(1)}px "Hiragino Kaku Gothic ProN",sans-serif`;
+      const bw = Math.max(bh*1.5, ctx.measureText(p.code).width + bh*0.7);
+      roundRect(ctx, px-bw/2, pt-bh*1.35, bw, bh, bh/2);
+      ctx.fillStyle = t.color; ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(p.code, px, pt - bh*1.35 + bh*0.54);
+    }
+  }
+}
+
 async function exportPNG(){
   const shown = ORDER.filter(k=>pvOn[k]);
   if(!shown.length) return;
 
-  // --- 描画範囲をワールド座標で求める ---
+  const layout    = document.getElementById('png-layout').value;   // map | full
+  const showBadge = document.getElementById('pv-badge').checked;
+  const OUT_W = outWidth();
+
+  // --- 全体サイズと、地図が占める領域を決める ---
+  let W, H, mapW, mapH;
+  if(layout === 'full'){
+    W = OUT_W; H = Math.round(W/(16/9));       // Web掲載向けに16:9
+    mapW = Math.round(W*0.56); mapH = H;       // 左が地図、右が標高グラフ
+  }else{
+    W = OUT_W; H = Math.round(W/OUT_AR);       // A4横と同じ比率
+    mapW = W; mapH = H;
+  }
+
+  // --- 描画範囲を地図領域の縦横比に合わせる ---
   let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
   for(const k of shown) for(const p of COURSES[k].pts){
     const q = world0(p.lat, p.lon);
@@ -708,20 +853,17 @@ async function exportPNG(){
   const padX=(x1-x0)*0.03, padY=(y1-y0)*0.03;
   x0-=padX; x1+=padX; y0-=padY; y1+=padY;
 
-  // A4横の比率に合わせて範囲を広げる
+  const AR = mapW/mapH;
   let bw=x1-x0, bh=y1-y0;
-  if(bw/bh < OUT_AR){ const need=bh*OUT_AR, c=(x0+x1)/2; x0=c-need/2; x1=c+need/2; }
-  else              { const need=bw/OUT_AR, c=(y0+y1)/2; y0=c-need/2; y1=c+need/2; }
+  if(bw/bh < AR){ const need=bh*AR, c=(x0+x1)/2; x0=c-need/2; x1=c+need/2; }
+  else          { const need=bw/AR, c=(y0+y1)/2; y0=c-need/2; y1=c+need/2; }
   bw=x1-x0; bh=y1-y0;
-
-  const OUT_W = outWidth();
-  const W = OUT_W, H = Math.round(OUT_W/OUT_AR);
-  const scale = W/bw;                       // ワールド座標→出力px
+  const scale = mapW/bw;
 
   // --- タイル枚数が過大にならないズームを選ぶ ---
   let z = Math.min(18, Math.max(1, Math.round(Math.log2(scale))));
   const tileCount = zz => {
-    const n = 2**zz, tw = 256/n;            // 1タイルのワールド幅
+    const n = 2**zz, tw = 256/n;
     return (Math.floor(x1/tw)-Math.floor(x0/tw)+1) * (Math.floor(y1/tw)-Math.floor(y0/tw)+1);
   };
   while(z>1 && tileCount(z)>300) z--;
@@ -731,7 +873,10 @@ async function exportPNG(){
   const ctx = cv.getContext('2d');
   ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
 
-  // --- 地図タイルを敷き詰める ---
+  // --- 地図タイル（地図領域だけに描く）---
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,mapW,mapH); ctx.clip();
+
   const n = 2**z, tw = 256/n;
   const tx0=Math.floor(x0/tw), tx1=Math.floor(x1/tw);
   const ty0=Math.floor(y0/tw), ty1=Math.floor(y1/tw);
@@ -746,16 +891,16 @@ async function exportPNG(){
     jobs.push(loadTile(url).then(img=>{
       if(!img) return;
       const dx=(tx*tw-x0)*scale, dy=(ty*tw-y0)*scale, d=tw*scale;
-      ctx.drawImage(img, dx, dy, d+1, d+1);   // +1 で継ぎ目を消す
+      ctx.drawImage(img, dx, dy, d+1, d+1);
     }));
   }
   await Promise.all(jobs);
 
   // --- コース線 ---
   const PX = p => { const q=world0(p.lat,p.lon); return [(q.x-x0)*scale, (q.y-y0)*scale]; };
-  const LW = W/420;
-  ctx.lineJoin='round'; ctx.lineCap='round';
+  const LW = mapW/420;
   const DASH = { expert:[], challenge:[LW*3, LW*2], kids:[LW*0.7, LW*1.6] };
+  ctx.lineJoin='round'; ctx.lineCap='round';
   for(const k of shown){
     ctx.strokeStyle=COURSES[k].color;
     ctx.lineWidth=LW;
@@ -766,9 +911,10 @@ async function exportPNG(){
   }
   ctx.setLineDash([]);
 
-  // --- 地点バッジ ---
-  if(document.getElementById('pv-badge').checked){
-    const BH = W/42, seen=new Set();
+  // --- 地図上の地点バッジ ---
+  const BH = mapW/24;      // プレビューの見え方(約4.2%)に合わせる
+  if(showBadge){
+    const seen=new Set();
     ctx.textAlign='center'; ctx.textBaseline='middle';
     for(const k of shown) for(const p of poisOf(k)){
       if(seen.has(p.id)) continue;
@@ -777,39 +923,56 @@ async function exportPNG(){
       const [X,Y]=PX(p.courses[k]);
       ctx.font=`700 ${BH*0.56}px "Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif`;
       const bw2=Math.max(BH*1.45, ctx.measureText(p.code).width + BH*0.75);
-      const r=BH/2, L=X-bw2/2, T=Y-BH/2;
-      ctx.beginPath();
-      ctx.moveTo(L+r,T); ctx.lineTo(L+bw2-r,T); ctx.arcTo(L+bw2,T,L+bw2,T+r,r);
-      ctx.lineTo(L+bw2,T+BH-r); ctx.arcTo(L+bw2,T+BH,L+bw2-r,T+BH,r);
-      ctx.lineTo(L+r,T+BH); ctx.arcTo(L,T+BH,L,T+BH-r,r);
-      ctx.lineTo(L,T+r); ctx.arcTo(L,T,L+r,T,r); ctx.closePath();
+      roundRect(ctx, X-bw2/2, Y-BH/2, bw2, BH, BH/2);
       ctx.fillStyle=t.color; ctx.fill();
       ctx.strokeStyle='#fff'; ctx.lineWidth=BH*0.13; ctx.stroke();
       ctx.fillStyle='#fff'; ctx.fillText(p.code, X, Y+BH*0.02);
     }
   }
 
-  // --- 出典表示（地理院タイルの利用条件） ---
+  // --- 出典表示（地理院タイルの利用条件）---
   const credit = swapped ? '© OpenStreetMap contributors' : '出典：地理院タイル（国土地理院）';
-  ctx.font=`${W/190}px "Hiragino Kaku Gothic ProN",sans-serif`;
+  ctx.font=`${mapW/190}px "Hiragino Kaku Gothic ProN",sans-serif`;
   ctx.textAlign='right'; ctx.textBaseline='bottom';
-  const tw2=ctx.measureText(credit).width, pad=W/300;
+  const tw2=ctx.measureText(credit).width, pad=mapW/300;
   ctx.fillStyle='rgba(255,255,255,.88)';
-  ctx.fillRect(W-tw2-pad*3, H-W/120-pad, tw2+pad*3, W/120+pad);
+  ctx.fillRect(mapW-tw2-pad*3, mapH-mapW/120-pad, tw2+pad*3, mapW/120+pad);
   ctx.fillStyle='#333';
-  ctx.fillText(credit, W-pad*1.5, H-pad*0.6);
+  ctx.fillText(credit, mapW-pad*1.5, mapH-pad*0.6);
+
+  ctx.restore();   // 地図領域のクリップ解除
+
+  // --- 右側の標高グラフ（地図＋標高レイアウトのみ）---
+  if(layout === 'full'){
+    const px0 = mapW, pw = W-mapW;
+    ctx.fillStyle='#fff'; ctx.fillRect(px0, 0, pw, H);
+    ctx.strokeStyle='#d3d0c2'; ctx.lineWidth=Math.max(1, W/2000);
+    ctx.beginPath(); ctx.moveTo(px0+.5, 0); ctx.lineTo(px0+.5, H); ctx.stroke();
+
+    const inner = pw*0.055;                       // 左右の内側余白
+    const rows  = shown.length;
+    const rh    = H/rows;
+    shown.forEach((k, i)=>{
+      drawProfile(ctx, k, px0+inner, i*rh, pw-inner*1.6, rh, showBadge);
+      if(i<rows-1){
+        ctx.strokeStyle='#e6e3d7'; ctx.lineWidth=Math.max(1, W/2400);
+        ctx.beginPath();
+        ctx.moveTo(px0+inner, (i+1)*rh); ctx.lineTo(W-inner, (i+1)*rh); ctx.stroke();
+      }
+    });
+  }
 
   // --- ダウンロード ---
+  const tag = layout==='full' ? '地図と標高' : '地図';
   await new Promise(res=> cv.toBlob(b=>{
     const a=document.createElement('a');
     a.href=URL.createObjectURL(b);
-    a.download=`三田母子トレイルレース_コースマップ_${W}px.png`;
+    a.download=`三田母子トレイルレース_${tag}_${W}px.png`;
     a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
     res();
   }, 'image/png'));
 }
-
 const btnPng=document.getElementById('btn-png');
 btnPng.addEventListener('click', async ()=>{
   btnPng.disabled=true; btnPng.textContent='生成中…';
