@@ -127,6 +127,10 @@
   .pvchk{display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap}
   .pvchk .sw{display:inline-block; width:13px; height:3px; border-radius:2px}
   .pvspace{flex:1}
+  .pvbar select{
+    font:inherit; font-size:11.5px; padding:4px 6px; border-radius:5px;
+    border:1px solid var(--rule); background:#fff; color:var(--ink); cursor:pointer;
+  }
   .pvbar button{
     appearance:none; font:inherit; font-size:12px; font-weight:700; cursor:pointer;
     padding:7px 15px; border-radius:6px; border:1px solid var(--ink);
@@ -195,11 +199,19 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v5</small></span>
+  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v6</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
   <span class="pvspace"></span>
-  <button type="button" id="btn-png" class="pri">PNG保存（A4横・高解像度）</button>
+  <label class="pvchk">解像度
+    <select id="png-size">
+      <option value="3300">高（3300px・印刷用 約294dpi）</option>
+      <option value="2000">中（2000px・A4印刷 約178dpi）</option>
+      <option value="1200" selected>低（1200px・Web掲載向け）</option>
+      <option value="800">最小（800px・軽量）</option>
+    </select>
+  </label>
+  <button type="button" id="btn-png" class="pri">PNG保存</button>
   <button type="button" id="btn-doprint">印刷</button>
   <button type="button" id="btn-close">閉じる</button>
 </div>
@@ -218,7 +230,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v5：PNG書き出し対応］</b>
+      <b style="color:var(--ink)">［build v6：PNG解像度選択］</b>
     </div>
   </div>
 </div>
@@ -640,8 +652,10 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePreview(); }
 // ===== PNG書き出し（ブラウザの印刷機能を経由しない）==================
 // タイルとコース線を自前で canvas に合成するため、印刷CSSやLeafletの
 // 再描画タイミングに左右されず、常に同じ結果が得られる。
-const OUT_W = 3300;                 // 出力幅(px)。A4横285mmで約294dpi
 const OUT_AR = 285/180;             // 印刷面と同じ縦横比
+function outWidth(){                // 出力幅(px)はツールバーの選択に従う
+  return parseInt(document.getElementById('png-size').value, 10) || 1200;
+}
 
 // 緯度経度 → ズーム0基準のワールド座標(256px)
 function world0(lat, lon){
@@ -681,6 +695,7 @@ async function exportPNG(){
   else              { const need=bw/OUT_AR, c=(y0+y1)/2; y0=c-need/2; y1=c+need/2; }
   bw=x1-x0; bh=y1-y0;
 
+  const OUT_W = outWidth();
   const W = OUT_W, H = Math.round(OUT_W/OUT_AR);
   const scale = W/bw;                       // ワールド座標→出力px
 
@@ -769,7 +784,7 @@ async function exportPNG(){
   await new Promise(res=> cv.toBlob(b=>{
     const a=document.createElement('a');
     a.href=URL.createObjectURL(b);
-    a.download='三田母子トレイルレース_コースマップ.png';
+    a.download=`三田母子トレイルレース_コースマップ_${W}px.png`;
     a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
     res();
@@ -781,7 +796,7 @@ btnPng.addEventListener('click', async ()=>{
   btnPng.disabled=true; btnPng.textContent='生成中…';
   try{ await exportPNG(); }
   catch(err){ alert('PNGの生成に失敗しました: '+err.message); }
-  btnPng.disabled=false; btnPng.textContent='PNG保存（A4横・高解像度）';
+  btnPng.disabled=false; btnPng.textContent='PNG保存';
 });
 
 // ----- 印刷実行 --------------------------------------------------------
