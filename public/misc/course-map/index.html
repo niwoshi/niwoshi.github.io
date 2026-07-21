@@ -169,6 +169,12 @@
   body.preview .profiles{display:none}
   body.preview #map{position:static; width:auto; height:100%; min-height:0; border:0; box-shadow:none}
 
+  /* A3横を選んだとき */
+  body.preview.a3 .app{
+    width:min(94vw, calc((100vh - 84px) * 1.4316));
+    aspect-ratio:408 / 285;
+  }
+
   /* 地図＋標高グラフのレイアウトを選んだとき */
   body.preview.full .app{
     width:min(94vw, calc((100vh - 84px) * 1.7778));
@@ -239,21 +245,23 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v12</small></span>
+  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v17</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
   <span class="pvspace"></span>
   <label class="pvchk">レイアウト
     <select id="png-layout">
-      <option value="map" selected>地図のみ（A4横）</option>
-      <option value="full">地図＋標高グラフ（16:9）</option>
+      <option value="map-a4" selected>地図のみ・A4横</option>
+      <option value="map-a3">地図のみ・A3横</option>
+      <option value="full">地図＋標高グラフ・16:9</option>
     </select>
   </label>
   <label class="pvchk">解像度
     <select id="png-size">
-      <option value="3300">高（3300px・印刷用 約294dpi）</option>
-      <option value="2000">中（2000px・A4印刷 約178dpi）</option>
-      <option value="1200" selected>低（1200px・Web掲載向け）</option>
+      <option value="4800">最高（4800px・A3印刷 約300dpi）</option>
+      <option value="3300" selected>高（3300px・A4印刷 約294dpi）</option>
+      <option value="2000">中（2000px）</option>
+      <option value="1200">低（1200px・Web掲載向け）</option>
       <option value="800">最小（800px・軽量）</option>
     </select>
   </label>
@@ -276,7 +284,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v12：出力の文字サイズ調整］</b>
+      <b style="color:var(--ink)">［build v17：全コース実線・太さで区別］</b>
     </div>
   </div>
 </div>
@@ -431,11 +439,14 @@ GSI.on('tileerror', ()=>{
 map.on('click', ()=> map.scrollWheelZoom.enable());
 map.getContainer().addEventListener('mouseleave', ()=> map.scrollWheelZoom.disable());
 
-// 3コースを常時表示（描画順：長い順に下から）
+// 画面表示の線の太さ（太い順に描くので、重なっても下の線の縁が見える）
+const SCREEN_W = { expert:6, challenge:3.6, kids:2 };
+
+// 3コースを常時表示（ORDER順に描くので エキスパートが下、ビギナーが上）
 const lines={};
 for(const k of ORDER){
   lines[k]=L.polyline(COURSES[k].pts.map(p=>[p.lat,p.lon]),{
-    color:COURSES[k].color, weight:3.5, opacity:.9, lineCap:'round', lineJoin:'round'
+    color:COURSES[k].color, weight:SCREEN_W[k], opacity:.95, lineCap:'round', lineJoin:'round'
   }).addTo(map);
 }
 
@@ -555,7 +566,7 @@ function clearAll(){
   cursor.setOpacity(0);
   document.querySelectorAll('.course').forEach(el=>el.classList.remove('on'));
   document.querySelectorAll('.vline,.cdot').forEach(n=>n.style.display='none');
-  for(const k of ORDER) lines[k].setStyle({opacity:.9, weight:3.5, dashArray:null});
+  for(const k of ORDER) lines[k].setStyle({opacity:.95, weight:SCREEN_W[k], dashArray:null});
 }
 
 function point(k, evt){
@@ -633,10 +644,11 @@ function whenTilesReady(cb){
 }
 
 // ----- プレビューの状態 -----------------------------------------------
+// すべて実線。太い順に下から重ねるので、重複区間でも下の線の縁が見える
 const PRINT_STYLE = {
-  expert:    { weight:5,   dashArray:null },
-  challenge: { weight:4.5, dashArray:'14 9' },
-  kids:      { weight:4,   dashArray:'3 7' }
+  expert:    { weight:7,   dashArray:null },
+  challenge: { weight:4.2, dashArray:null },
+  kids:      { weight:2.2, dashArray:null }
 };
 const pvOn = { expert:true, challenge:true, kids:true };
 let previewing = false;
@@ -676,15 +688,56 @@ function paintPreview(){
   }
 }
 
+// 用紙ごとの印刷可能幅(mm)。解像度ラベルのdpi表示に使う
+const PAPER_MM = { 'map-a4':285, 'map-a3':408 };
+const SIZE_OPTS = [4800, 3300, 2000, 1200, 800];
+
+// 選んだ用紙に応じて解像度の選択肢を作り直す
+function refreshSizeOptions(){
+  const v   = document.getElementById('png-layout').value;
+  const mm  = PAPER_MM[v];
+  const sel = document.getElementById('png-size');
+  const cur = parseInt(sel.value, 10);
+  sel.innerHTML = '';
+
+  let best = null;
+  for(const w of SIZE_OPTS){
+    let label, ok = true;
+    if(mm){
+      const dpi  = Math.round(w / (mm/25.4));
+      const mark = dpi>=250 ? '印刷向き' : (dpi>=150 ? '実用' : '粗い');
+      label = w + 'px ／ ' + dpi + 'dpi（' + mark + '）';
+      ok = dpi >= 150;
+      if(dpi>=250) best = w;              // 印刷に足る中で最も小さいもの
+    }else{
+      label = w>=3300 ? w + 'px（重い）'
+            : w>=2000 ? w + 'px（Web掲載におすすめ）'
+            : w + 'px（軽量）';
+      if(w===2000) best = w;
+    }
+    const o = document.createElement('option');
+    o.value = w;
+    o.textContent = (ok ? '' : '△ ') + label;
+    sel.appendChild(o);
+  }
+  // 今の選択が印刷に耐えるならそのまま、無理なら推奨値に切り替える
+  sel.value = cur;
+  if(mm && Math.round(cur/(mm/25.4)) < 150) sel.value = best;
+  if(!sel.value) sel.value = best || 2000;
+}
+
 // プレビュー枠を出力レイアウトに合わせる
 function syncLayout(){
-  const full = document.getElementById('png-layout').value === 'full';
-  document.body.classList.toggle('full', full);
+  const v = document.getElementById('png-layout').value;
+  document.body.classList.toggle('full', v === 'full');
+  document.body.classList.toggle('a3',   v === 'map-a3');
+  refreshSizeOptions();
   if(previewing){
     requestAnimationFrame(()=>{ map.invalidateSize({animate:false}); paintPreview(); });
   }
 }
 document.getElementById('png-layout').addEventListener('change', syncLayout);
+refreshSizeOptions();
 
 // ----- プレビューを開く -----------------------------------------------
 document.getElementById('btn-preview').addEventListener('click', ()=>{
@@ -701,6 +754,7 @@ function closePreview(){
   previewing = false;
   document.body.classList.remove('preview');
   document.body.classList.remove('full');
+  document.body.classList.remove('a3');
   applyMode();
 }
 document.getElementById('btn-close').addEventListener('click', closePreview);
@@ -825,23 +879,41 @@ function drawProfile(ctx, k, ox, oy, w, h, showBadge){
   }
 }
 
-async function exportPNG(){
+// ===== 用紙・レイアウトのプリセット ==================================
+// ar   : 縦横比（印刷可能領域）
+// page : 印刷時の @page 指定
+const PAPERS = {
+  'map-a4': { ar:285/180, page:'A4 landscape', label:'A4横' },
+  'map-a3': { ar:408/285, page:'A3 landscape', label:'A3横' },
+  'full'  : { ar:16/9,    page:null,           label:'16:9' }
+};
+
+// 同時ダウンロード数を制限してタイルを取得する
+async function runLimited(tasks, limit, onProgress){
+  let i=0, done=0;
+  const worker = async ()=>{
+    while(i < tasks.length){
+      const idx = i++;
+      await tasks[idx]();
+      if(onProgress) onProgress(++done, tasks.length);
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(limit, tasks.length)}, worker));
+}
+
+// 地図画像を canvas に描いて返す（PNG保存・印刷の共通処理）
+async function buildCanvas(onProgress){
   const shown = ORDER.filter(k=>pvOn[k]);
-  if(!shown.length) return;
+  if(!shown.length) return null;
 
-  const layout    = document.getElementById('png-layout').value;   // map | full
+  const layoutKey = document.getElementById('png-layout').value;
+  const paper     = PAPERS[layoutKey] || PAPERS['map-a4'];
+  const isFull    = layoutKey === 'full';
   const showBadge = document.getElementById('pv-badge').checked;
-  const OUT_W = outWidth();
+  const OUT_W     = outWidth();
 
-  // --- 全体サイズと、地図が占める領域を決める ---
-  let W, H, mapW, mapH;
-  if(layout === 'full'){
-    W = OUT_W; H = Math.round(W/(16/9));       // Web掲載向けに16:9
-    mapW = Math.round(W*0.56); mapH = H;       // 左が地図、右が標高グラフ
-  }else{
-    W = OUT_W; H = Math.round(W/OUT_AR);       // A4横と同じ比率
-    mapW = W; mapH = H;
-  }
+  let W = OUT_W, H = Math.round(W/paper.ar), mapW = W, mapH = H;
+  if(isFull){ mapW = Math.round(W*0.56); mapH = H; }
 
   // --- 描画範囲を地図領域の縦横比に合わせる ---
   let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
@@ -857,23 +929,25 @@ async function exportPNG(){
   let bw=x1-x0, bh=y1-y0;
   if(bw/bh < AR){ const need=bh*AR, c=(x0+x1)/2; x0=c-need/2; x1=c+need/2; }
   else          { const need=bw/AR, c=(y0+y1)/2; y0=c-need/2; y1=c+need/2; }
-  bw=x1-x0; bh=y1-y0;
+  bw=x1-x0;
   const scale = mapW/bw;
 
-  // --- タイル枚数が過大にならないズームを選ぶ ---
-  let z = Math.min(18, Math.max(1, Math.round(Math.log2(scale))));
+  // --- ズーム選択 ---
+  // ceil を使い、タイルの解像度が必ず出力解像度以上になるようにする。
+  // round だと拡大表示になってぼやける（範囲の広いコースほど顕著）。
   const tileCount = zz => {
     const n = 2**zz, tw = 256/n;
     return (Math.floor(x1/tw)-Math.floor(x0/tw)+1) * (Math.floor(y1/tw)-Math.floor(y0/tw)+1);
   };
-  while(z>1 && tileCount(z)>300) z--;
+  let z = Math.min(18, Math.max(1, Math.ceil(Math.log2(scale))));
+  while(z>1 && tileCount(z) > 1200) z--;      // 枚数の上限
 
   const cv = document.createElement('canvas');
   cv.width=W; cv.height=H;
   const ctx = cv.getContext('2d');
   ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
 
-  // --- 地図タイル（地図領域だけに描く）---
+  // --- 地図タイル ---
   ctx.save();
   ctx.beginPath(); ctx.rect(0,0,mapW,mapH); ctx.clip();
 
@@ -884,35 +958,36 @@ async function exportPNG(){
     ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
     : 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png';
 
-  const jobs=[];
+  const tasks=[];
   for(let tx=tx0; tx<=tx1; tx++) for(let ty=ty0; ty<=ty1; ty++){
     if(tx<0||ty<0||tx>=n||ty>=n) continue;
     const url = base.replace('{z}',z).replace('{x}',tx).replace('{y}',ty);
-    jobs.push(loadTile(url).then(img=>{
+    tasks.push(async ()=>{
+      const img = await loadTile(url);
       if(!img) return;
       const dx=(tx*tw-x0)*scale, dy=(ty*tw-y0)*scale, d=tw*scale;
       ctx.drawImage(img, dx, dy, d+1, d+1);
-    }));
+    });
   }
-  await Promise.all(jobs);
+  await runLimited(tasks, 12, onProgress);
 
   // --- コース線 ---
   const PX = p => { const q=world0(p.lat,p.lon); return [(q.x-x0)*scale, (q.y-y0)*scale]; };
   const LW = mapW/420;
-  const DASH = { expert:[], challenge:[LW*3, LW*2], kids:[LW*0.7, LW*1.6] };
+  // すべて実線。エキスパートを最も太く、ビギナーを最も細くして
+  // 描画順（太い順に下）で重複区間の判別ができるようにする
+  const WEIGHT = { expert:LW*1.55, challenge:LW*0.92, kids:LW*0.50 };
   ctx.lineJoin='round'; ctx.lineCap='round';
   for(const k of shown){
     ctx.strokeStyle=COURSES[k].color;
-    ctx.lineWidth=LW;
-    ctx.setLineDash(DASH[k]||[]);
+    ctx.lineWidth=WEIGHT[k] || LW;
     ctx.beginPath();
     COURSES[k].pts.forEach((p,i)=>{ const [X,Y]=PX(p); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
     ctx.stroke();
   }
-  ctx.setLineDash([]);
 
   // --- 地図上の地点バッジ ---
-  const BH = mapW/24;      // プレビューの見え方(約4.2%)に合わせる
+  const BH = mapW/24;
   if(showBadge){
     const seen=new Set();
     ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -940,18 +1015,16 @@ async function exportPNG(){
   ctx.fillStyle='#333';
   ctx.fillText(credit, mapW-pad*1.5, mapH-pad*0.6);
 
-  ctx.restore();   // 地図領域のクリップ解除
+  ctx.restore();
 
-  // --- 右側の標高グラフ（地図＋標高レイアウトのみ）---
-  if(layout === 'full'){
+  // --- 右側の標高グラフ ---
+  if(isFull){
     const px0 = mapW, pw = W-mapW;
     ctx.fillStyle='#fff'; ctx.fillRect(px0, 0, pw, H);
     ctx.strokeStyle='#d3d0c2'; ctx.lineWidth=Math.max(1, W/2000);
     ctx.beginPath(); ctx.moveTo(px0+.5, 0); ctx.lineTo(px0+.5, H); ctx.stroke();
 
-    const inner = pw*0.055;                       // 左右の内側余白
-    const rows  = shown.length;
-    const rh    = H/rows;
+    const inner = pw*0.055, rows = shown.length, rh = H/rows;
     shown.forEach((k, i)=>{
       drawProfile(ctx, k, px0+inner, i*rh, pw-inner*1.6, rh, showBadge);
       if(i<rows-1){
@@ -962,53 +1035,65 @@ async function exportPNG(){
     });
   }
 
-  // --- ダウンロード ---
-  const tag = layout==='full' ? '地図と標高' : '地図';
-  await new Promise(res=> cv.toBlob(b=>{
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(b);
-    a.download=`三田母子トレイルレース_${tag}_${W}px.png`;
-    a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-    res();
-  }, 'image/png'));
+  return { canvas:cv, paper, shown, isFull, W, z, tiles:tasks.length };
 }
+
+// ----- PNG保存 ---------------------------------------------------------
 const btnPng=document.getElementById('btn-png');
 btnPng.addEventListener('click', async ()=>{
   btnPng.disabled=true; btnPng.textContent='生成中…';
-  try{ await exportPNG(); }
-  catch(err){ alert('PNGの生成に失敗しました: '+err.message); }
+  try{
+    const r = await buildCanvas((d,t)=>{ btnPng.textContent=`地図取得 ${d}/${t}`; });
+    if(!r) return;
+    btnPng.textContent='書き出し中…';
+    const names = r.shown.length===ORDER.length ? '全コース'
+                : r.shown.map(k=>COURSES[k].label).join('・');
+    const tag = r.isFull ? '地図と標高' : '地図';
+    await new Promise(res=> r.canvas.toBlob(b=>{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(b);
+      a.download=`三田母子トレイルレース_${names}_${tag}_${r.W}px.png`;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+      res();
+    }, 'image/png'));
+  }catch(err){ alert('PNGの生成に失敗しました: '+err.message); }
   btnPng.disabled=false; btnPng.textContent='PNG保存';
 });
 
-// ----- 印刷実行 --------------------------------------------------------
+// ----- 印刷（生成した画像を印刷する）-----------------------------------
+// ブラウザの印刷レイアウトに Leaflet を追従させる方式はタイミング依存で
+// 不安定だったため、PNGと同じ canvas を作り、それだけを印刷する。
 const doPrint=document.getElementById('btn-doprint');
-doPrint.addEventListener('click', ()=>{
+doPrint.addEventListener('click', async ()=>{
   doPrint.disabled=true; doPrint.textContent='準備中…';
-  paintPreview();
-  whenTilesReady(()=>{
-    window.print();
-    doPrint.disabled=false; doPrint.textContent='印刷';
-  });
-});
+  try{
+    const r = await buildCanvas((d,t)=>{ doPrint.textContent=`地図取得 ${d}/${t}`; });
+    if(!r) return;
+    const url  = r.canvas.toDataURL('image/png');
+    const page = r.paper.page || 'A4 landscape';
+    const win  = window.open('', '_blank');
+    if(!win){ alert('ポップアップがブロックされました。許可してから再度お試しください。'); return; }
 
-// 印刷レイアウトが適用された直後に Leaflet へサイズ変更を通知する。
-// これを呼ばないと、コース線がクリップ領域外と判定されて描画されない。
-window.addEventListener('beforeprint', ()=>{
-  if(!previewing) return;
-  roPaused = true;                        // 印刷中は ResizeObserver を止める
-  map.invalidateSize({animate:false});    // 新しいサイズを認識させる
-  const shown = ORDER.filter(k=>pvOn[k]);
-  if(shown.length){
-    map.fitBounds(L.featureGroup(shown.map(k=>lines[k])).getBounds(),
-                  {padding:[4,4], animate:false});
-  }
-  for(const k of ORDER) if(map.hasLayer(lines[k])) lines[k].redraw();
-});
+    // document.write は使わない。
+    // JSの文字列にHTMLの閉じタグを書くとパーサーがスクリプトの終端と
+    // 誤判定することがあるため、DOM APIで組み立てる。
+    const d = win.document;
+    d.title = '三田母子トレイルレース コースマップ';
+    const st = d.createElement('style');
+    st.textContent =
+      '@page{size:' + page + '; margin:6mm}'
+      + 'html,body{margin:0;padding:0;background:#fff}'
+      + 'img{width:100%;height:auto;display:block}';
+    d.head.appendChild(st);
+    const img = d.createElement('img');
+    img.src = url;
+    d.body.appendChild(img);
 
-window.addEventListener('afterprint', ()=>{
-  roPaused = false;
-  if(previewing){ map.invalidateSize({animate:false}); paintPreview(); }
+    const go = ()=>{ win.focus(); win.print(); };
+    if(img.complete) setTimeout(go, 250); else img.onload = ()=> setTimeout(go, 250);
+  }catch(err){ alert('印刷用画像の生成に失敗しました: '+err.message); }
+  doPrint.disabled=false; doPrint.textContent='印刷';
 });
 
 // ===== 埋め込みモード判定（?embed=1 で地図のみ表示）===================
