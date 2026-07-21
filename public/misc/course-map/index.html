@@ -65,8 +65,11 @@
   .head{display:flex; align-items:baseline; gap:9px; margin-bottom:2px}
   .swatch{width:16px; height:3px; border-radius:2px; flex:none; align-self:center}
   .nm{font-size:13px; font-weight:700; letter-spacing:.02em}
-  .mt{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
-  .sub2{font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; margin:1px 0 3px 25px}
+  /* コース見出しの距離・累積標高は非表示。
+     再表示したいときは、この2行の display:none を消す */
+  .mt{display:none}
+  .sub2{display:none}
+  .mt-hidden-src{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
   .live{
     margin-left:auto; font-size:11px; font-variant-numeric:tabular-nums;
     opacity:0; transition:opacity .12s; font-weight:700; white-space:nowrap;
@@ -112,6 +115,22 @@
 
   /* ---- 印刷専用要素は画面では隠す ---- */
   .printhead, .aidtable{display:none}
+
+  /* ---- 埋め込みモード（URLに ?embed=1 を付けたとき）---- */
+  body.embed .profiles{display:none}
+  body.embed .app{grid-template-columns:1fr; grid-template-rows:1fr; height:100vh; min-height:0}
+  body.embed #map{height:100vh; min-height:0}
+  .mlegend{display:none}
+  body.embed .mlegend{
+    display:flex; flex-direction:column; gap:5px;
+    position:absolute; top:10px; right:10px; z-index:500;
+    background:rgba(255,255,255,.93); border:1px solid var(--rule);
+    border-radius:8px; padding:8px 10px; box-shadow:0 2px 10px rgba(0,0,0,.15);
+    font-size:12px;
+  }
+  .mlegend label{display:flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap}
+  .mlegend .sw{display:inline-block; width:15px; height:3px; border-radius:2px; flex:none}
+  .mlegend input{margin:0}
 
   /* ---- 印刷プレビュー ---- */
   .pvbar{display:none}
@@ -199,7 +218,7 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v6</small></span>
+  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v8</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
   <span class="pvspace"></span>
@@ -230,7 +249,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v6：PNG解像度選択］</b>
+      <b style="color:var(--ink)">［build v8：埋め込みモード対応］</b>
     </div>
   </div>
 </div>
@@ -829,6 +848,10 @@ window.addEventListener('afterprint', ()=>{
   if(previewing){ map.invalidateSize({animate:false}); paintPreview(); }
 });
 
+// ===== 埋め込みモード判定（?embed=1 で地図のみ表示）===================
+const EMBED = new URLSearchParams(location.search).has('embed');
+if(EMBED) document.body.classList.add('embed');
+
 // ===== レイアウト切替（CSSの @media と同じ値を使う）==================
 const BREAKPOINT = 800;                     // ← CSS側の 800px と必ず揃える
 const mq = window.matchMedia(`(max-width:${BREAKPOINT}px)`);
@@ -842,13 +865,13 @@ for(const k of ORDER){
   const b=document.createElement('button');
   b.className='tab'; b.type='button'; b.role='tab'; b.dataset.c=k;
   b.style.setProperty('--c', c.color);
-  b.innerHTML=`<span class="t-nm">${c.label}</span><span class="t-mt">${c.official}</span>`;
+  b.innerHTML=`<span class="t-nm">${c.label}</span>`;
   b.addEventListener('click', ()=>{ selected=k; applyMode(); });
   tabs.appendChild(b);
 }
 
 function applyMode(){
-  const single = mq.matches;
+  const single = mq.matches && !EMBED;   // 埋め込みモードでは常に全コース表示
   profiles.classList.toggle('single', single);
 
   document.querySelectorAll('.tab').forEach(t=>{
@@ -877,6 +900,26 @@ function applyMode(){
 }
 
 mq.addEventListener('change', applyMode);
+
+// ----- 埋め込みモード用の凡例（地図内に重ねる。チェックで表示切替）-----
+if(EMBED){
+  const box=document.createElement('div');
+  box.className='mlegend';
+  box.innerHTML = ORDER.map(k=>
+    `<label><input type="checkbox" data-c="${k}" checked>`
+    + `<span class="sw" style="background:${COURSES[k].color}"></span>${COURSES[k].label}</label>`
+  ).join('');
+  document.getElementById('map').appendChild(box);
+  L.DomEvent.disableClickPropagation(box);   // 地図のドラッグに巻き込まれないように
+  box.querySelectorAll('input').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const k=cb.dataset.c;
+      if(cb.checked){ lines[k].addTo(map); lines[k].bringToFront(); }
+      else if(map.hasLayer(lines[k])) map.removeLayer(lines[k]);
+      renderPois(ORDER.filter(x=>box.querySelector(`input[data-c="${x}"]`).checked));
+    });
+  });
+}
 
 // ===== サイズ確定後に地図をフィット ==================================
 let roPaused = false;
