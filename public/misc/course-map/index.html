@@ -99,10 +99,110 @@
   .pop td{padding:2px 0; border-top:1px solid var(--rule); font-variant-numeric:tabular-nums}
   .leaflet-popup-content{margin:10px 12px}
 
+  /* ---- 印刷ボタン ---- */
+  .actions{padding:10px 16px; border-top:1px solid var(--rule)}
+  .profiles.single .actions{display:none}      /* 狭い画面では出さない */
+  #btn-preview{
+    appearance:none; font:inherit; font-size:12px; font-weight:700; cursor:pointer;
+    padding:8px 16px; border-radius:6px; border:1px solid var(--ink);
+    background:#fff; color:var(--ink); transition:background .15s, color .15s;
+  }
+  #btn-preview:hover{background:var(--ink); color:#fff}
+  #btn-preview:disabled{opacity:.5; cursor:progress}
+
+  /* ---- 印刷専用要素は画面では隠す ---- */
+  .printhead, .aidtable{display:none}
+
+  /* ---- 印刷プレビュー ---- */
+  .pvbar{display:none}
+  body.preview{overflow:hidden}
+  body.preview .pvbar{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    position:fixed; top:0; left:0; right:0; height:48px; z-index:60;
+    padding:0 16px; background:#fff; border-bottom:1px solid var(--rule);
+    box-shadow:0 2px 10px rgba(0,0,0,.08); font-size:12px;
+  }
+  .pvtitle{font-weight:700; letter-spacing:.03em}
+  .pvcourses{display:flex; gap:12px}
+  .pvchk{display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap}
+  .pvchk .sw{display:inline-block; width:13px; height:3px; border-radius:2px}
+  .pvspace{flex:1}
+  .pvbar button{
+    appearance:none; font:inherit; font-size:12px; font-weight:700; cursor:pointer;
+    padding:7px 15px; border-radius:6px; border:1px solid var(--ink);
+    background:#fff; color:var(--ink);
+  }
+  .pvbar button.pri{background:var(--ink); color:#fff}
+  .pvbar button:disabled{opacity:.5; cursor:progress}
+
+  /* プレビュー中の地図は A4横と同じ縦横比（285:198）にする */
+  body.preview .app{display:block; height:auto}
+  body.preview .profiles{display:none}
+  body.preview #map{
+    position:fixed; top:64px; left:0; right:0; margin:0 auto; z-index:50;
+    width:min(94vw, calc((100vh - 84px) * 1.5833));
+    aspect-ratio:285 / 180; height:auto; min-height:0;
+    border:1px solid var(--rule); box-shadow:0 4px 24px rgba(0,0,0,.18);
+  }
+
+  .poi-lg{
+    min-width:56px; height:40px; padding:0 11px; border-radius:20px;
+    font-size:22px; line-height:40px; border-width:4px;
+    letter-spacing:.02em; box-shadow:0 2px 7px rgba(0,0,0,.45);
+  }
+
+  /* 印刷直前に画面上でも印刷サイズを再現し、そのサイズでタイルを読ませる */
+
+  /* ================= 印刷 (A4横・地図のみ) ================= */
+  @media print{
+    @page{ size:A4 landscape; margin:6mm }
+    html,body{height:auto; background:#fff; overflow:hidden}
+    *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+
+    /* 地図以外はすべて出さない */
+    .printhead,.tabs,.hint,.actions,#stack,.aidtable,.foot,.profiles,.pvbar,
+    .leaflet-control-zoom,.leaflet-popup,.live,.leaflet-tooltip{display:none !important}
+
+    .app{
+      display:block; height:auto; min-height:0; width:auto;
+      overflow:hidden; page-break-after:avoid; break-after:avoid;
+    }
+    #map{
+      position:static !important; width:100% !important; height:180mm !important;
+      max-height:180mm !important; min-height:0 !important;
+      aspect-ratio:auto !important; margin:0 !important;
+      border:0; box-shadow:none;
+      page-break-inside:avoid; break-inside:avoid;
+      page-break-after:avoid; break-after:avoid;
+    }
+    /* 出典表示は地理院タイルの利用条件のため残す */
+    .leaflet-control-attribution{
+      font-size:6pt; background:rgba(255,255,255,.85); box-shadow:none;
+    }
+  }
+
+  .plegend{display:none}
+
   .foot{padding:10px 16px 12px; font-size:9.5px; line-height:1.7; color:var(--muted); border-top:1px solid var(--rule)}
   .foot a{color:inherit}
   .hint{padding:9px 16px; font-size:11px; color:var(--muted); border-bottom:1px solid var(--rule); background:#fbfaf5}
 </style>
+
+<div class="printhead">
+  <b>三田母子トレイルレース コースマップ</b>
+  <span class="plegend" id="plegend"></span>
+  <span id="printdate"></span>
+</div>
+
+<div class="pvbar" id="pvbar">
+  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v5</small></span>
+  <span class="pvcourses" id="pvcourses"></span>
+  <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
+  <span class="pvspace"></span>
+  <button type="button" id="btn-png" class="pri">PNG保存（A4横・高解像度）</button>
+  <button type="button" id="btn-doprint">印刷</button>
+  <button type="button" id="btn-close">閉じる</button>
+</div>
 
 <div class="app">
   <div id="map"></div>
@@ -111,9 +211,14 @@
     <div class="tabs" role="tablist" id="tabs"></div>
     <div class="hint" id="hint">標高グラフをなぞると、左の地図にその地点が表示されます</div>
     <div id="stack"></div>
+    <div class="actions" id="actions">
+      <button type="button" id="btn-preview">印刷プレビュー（A4横）</button>
+    </div>
+    <table class="aidtable" id="aidtable"></table>
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
+      <b style="color:var(--ink)">［build v5：PNG書き出し対応］</b>
     </div>
   </div>
 </div>
@@ -256,11 +361,12 @@ const GSI = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.pn
   attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
   maxZoom:18, maxNativeZoom:18
 }).addTo(map);
+let tiles = GSI;
 let tileErr=0, swapped=false;
 GSI.on('tileerror', ()=>{
   if(swapped || ++tileErr<4) return;
   swapped=true; map.removeLayer(GSI);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
     maxZoom:19}).addTo(map);
 });
@@ -278,8 +384,10 @@ for(const k of ORDER){
 // ----- 地点マーカー -----------------------------------------------------
 const poiLayer = L.layerGroup().addTo(map);
 
-function renderPois(keys){
+function renderPois(keys, big){
   poiLayer.clearLayers();
+  const sz = big ? [64,40] : [30,20];
+  const an = big ? [32,20] : [15,10];
   const seen=new Set();
   for(const k of keys) for(const p of poisOf(k)){
     if(seen.has(p.id)) continue;
@@ -293,8 +401,8 @@ function renderPois(keys){
     }).join('');
     const badge = p.code;
     L.marker([p.lat, p.lon], {
-      icon: L.divIcon({ className:'', iconSize:[30,20], iconAnchor:[15,10], html:
-        `<div class="poi" style="background:${t.color}">${badge}</div>` }),
+      icon: L.divIcon({ className:'', iconSize:sz, iconAnchor:an, html:
+        `<div class="poi${big?' poi-lg':''}" style="background:${t.color}">${badge}</div>` }),
       zIndexOffset: 500
     }).addTo(poiLayer)
      .bindTooltip(`${p.code} ${p.name}`, {direction:'top', offset:[0,-13]})
@@ -389,7 +497,7 @@ function clearAll(){
   cursor.setOpacity(0);
   document.querySelectorAll('.course').forEach(el=>el.classList.remove('on'));
   document.querySelectorAll('.vline,.cdot').forEach(n=>n.style.display='none');
-  for(const k of ORDER) lines[k].setStyle({opacity:.9, weight:3.5});
+  for(const k of ORDER) lines[k].setStyle({opacity:.9, weight:3.5, dashArray:null});
 }
 
 function point(k, evt){
@@ -425,6 +533,286 @@ for(const k of ORDER){
   svg.addEventListener('pointerup',   e=>{ try{svg.releasePointerCapture(e.pointerId);}catch(_){} });
   svg.addEventListener('pointerleave', clearAll);
 }
+
+// ===== 印刷（A4横）===================================================
+// 印刷用の地点一覧を組み立てる
+(function buildAidTable(){
+  const t=document.getElementById('aidtable');
+  const cols=ORDER.filter(k=>true);
+  let html=`<thead><tr><th>地点</th>`
+    + cols.map(k=>`<th class="num">${COURSES[k].label}</th>`).join('')
+    + `<th class="num">関門</th></tr></thead><tbody>`;
+  for(const p of POIS){
+    const ty=POI_TYPES[p.type];
+    html += `<tr><td><span class="c" style="background:${ty.color}">${p.code}</span> ${p.name}`
+          + `<span style="color:var(--muted)"> ・${ty.label}</span></td>`
+          + cols.map(k=>{
+              const i=p.courses[k];
+              return `<td class="num">${i ? i.km.toFixed(2)+' km' : '—'}</td>`;
+            }).join('')
+          + `<td class="num">${
+              cols.map(k=>p.courses[k] && p.courses[k].cutoff)
+                  .filter(Boolean)[0] || '—'}</td></tr>`;
+  }
+  t.innerHTML = html+'</tbody>';
+})();
+
+document.getElementById('plegend').innerHTML = ORDER.map(k=>{
+  const c=COURSES[k];
+  return `<i><b style="background:${c.color}"></b>${c.label} ${c.stat.dist.toFixed(1)}km／D+${c.stat.gain}m</i>`;
+}).join('');
+
+document.getElementById('printdate').textContent =
+  new Date().toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric'}) + ' 時点';
+
+// タイルの読み込み完了を待ってから印刷ダイアログを出す
+function whenTilesReady(cb){
+  let done=false;
+  const finish=()=>{ if(done) return; done=true; clearTimeout(timer); cb(); };
+  const timer=setTimeout(finish, 4000);          // 最長4秒で打ち切り
+  if(tiles.isLoading && !tiles.isLoading()) return finish();
+  tiles.once('load', ()=> setTimeout(finish, 200));
+}
+
+// ----- プレビューの状態 -----------------------------------------------
+const PRINT_STYLE = {
+  expert:    { weight:5,   dashArray:null },
+  challenge: { weight:4.5, dashArray:'14 9' },
+  kids:      { weight:4,   dashArray:'3 7' }
+};
+const pvOn = { expert:true, challenge:true, kids:true };
+let previewing = false;
+
+// コース表示チェックボックスを生成
+document.getElementById('pvcourses').innerHTML = ORDER.map(k=>
+  `<label class="pvchk"><input type="checkbox" data-c="${k}" checked>`
+  + `<span class="sw" style="background:${COURSES[k].color}"></span>${COURSES[k].label}</label>`
+).join('');
+
+document.querySelectorAll('#pvcourses input').forEach(cb=>{
+  cb.addEventListener('change', ()=>{
+    pvOn[cb.dataset.c]=cb.checked;
+    paintPreview();
+  });
+});
+document.getElementById('pv-badge').addEventListener('change', paintPreview);
+
+// プレビュー／印刷で地図に描く内容を決める
+function paintPreview(){
+  for(const k of ORDER){
+    if(pvOn[k]){
+      if(!map.hasLayer(lines[k])) lines[k].addTo(map);
+      lines[k].setStyle({opacity:1, ...PRINT_STYLE[k]});
+      lines[k].bringToFront();
+      lines[k].redraw();
+    } else if(map.hasLayer(lines[k])){
+      map.removeLayer(lines[k]);
+    }
+  }
+  const shown = ORDER.filter(k=>pvOn[k]);
+  renderPois(document.getElementById('pv-badge').checked ? shown : [], true);
+  if(shown.length){
+    map.invalidateSize({animate:false});
+    map.fitBounds(L.featureGroup(shown.map(k=>lines[k])).getBounds(),
+                  {padding:[4,4], animate:false});
+  }
+}
+
+// ----- プレビューを開く -----------------------------------------------
+document.getElementById('btn-preview').addEventListener('click', ()=>{
+  previewing = true;
+  clearAll();
+  document.body.classList.add('preview');
+  requestAnimationFrame(()=>{ map.invalidateSize({animate:false}); paintPreview(); });
+});
+
+// ----- プレビューを閉じる ---------------------------------------------
+function closePreview(){
+  if(!previewing) return;
+  previewing = false;
+  document.body.classList.remove('preview');
+  document.body.classList.remove('printing');
+  applyMode();
+}
+document.getElementById('btn-close').addEventListener('click', closePreview);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePreview(); });
+
+// ===== PNG書き出し（ブラウザの印刷機能を経由しない）==================
+// タイルとコース線を自前で canvas に合成するため、印刷CSSやLeafletの
+// 再描画タイミングに左右されず、常に同じ結果が得られる。
+const OUT_W = 3300;                 // 出力幅(px)。A4横285mmで約294dpi
+const OUT_AR = 285/180;             // 印刷面と同じ縦横比
+
+// 緯度経度 → ズーム0基準のワールド座標(256px)
+function world0(lat, lon){
+  const x = (lon+180)/360*256;
+  const sy = Math.max(-0.9999, Math.min(0.9999, Math.sin(lat*Math.PI/180)));
+  const y = (0.5 - Math.log((1+sy)/(1-sy))/(4*Math.PI))*256;
+  return {x, y};
+}
+
+function loadTile(url){
+  return new Promise(res=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>res(img);
+    img.onerror = ()=>res(null);          // 欠測タイルは白のまま
+    img.src = url;
+  });
+}
+
+async function exportPNG(){
+  const shown = ORDER.filter(k=>pvOn[k]);
+  if(!shown.length) return;
+
+  // --- 描画範囲をワールド座標で求める ---
+  let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
+  for(const k of shown) for(const p of COURSES[k].pts){
+    const q = world0(p.lat, p.lon);
+    x0=Math.min(x0,q.x); x1=Math.max(x1,q.x);
+    y0=Math.min(y0,q.y); y1=Math.max(y1,q.y);
+  }
+  const padX=(x1-x0)*0.03, padY=(y1-y0)*0.03;
+  x0-=padX; x1+=padX; y0-=padY; y1+=padY;
+
+  // A4横の比率に合わせて範囲を広げる
+  let bw=x1-x0, bh=y1-y0;
+  if(bw/bh < OUT_AR){ const need=bh*OUT_AR, c=(x0+x1)/2; x0=c-need/2; x1=c+need/2; }
+  else              { const need=bw/OUT_AR, c=(y0+y1)/2; y0=c-need/2; y1=c+need/2; }
+  bw=x1-x0; bh=y1-y0;
+
+  const W = OUT_W, H = Math.round(OUT_W/OUT_AR);
+  const scale = W/bw;                       // ワールド座標→出力px
+
+  // --- タイル枚数が過大にならないズームを選ぶ ---
+  let z = Math.min(18, Math.max(1, Math.round(Math.log2(scale))));
+  const tileCount = zz => {
+    const n = 2**zz, tw = 256/n;            // 1タイルのワールド幅
+    return (Math.floor(x1/tw)-Math.floor(x0/tw)+1) * (Math.floor(y1/tw)-Math.floor(y0/tw)+1);
+  };
+  while(z>1 && tileCount(z)>300) z--;
+
+  const cv = document.createElement('canvas');
+  cv.width=W; cv.height=H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+
+  // --- 地図タイルを敷き詰める ---
+  const n = 2**z, tw = 256/n;
+  const tx0=Math.floor(x0/tw), tx1=Math.floor(x1/tw);
+  const ty0=Math.floor(y0/tw), ty1=Math.floor(y1/tw);
+  const base = swapped
+    ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+    : 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png';
+
+  const jobs=[];
+  for(let tx=tx0; tx<=tx1; tx++) for(let ty=ty0; ty<=ty1; ty++){
+    if(tx<0||ty<0||tx>=n||ty>=n) continue;
+    const url = base.replace('{z}',z).replace('{x}',tx).replace('{y}',ty);
+    jobs.push(loadTile(url).then(img=>{
+      if(!img) return;
+      const dx=(tx*tw-x0)*scale, dy=(ty*tw-y0)*scale, d=tw*scale;
+      ctx.drawImage(img, dx, dy, d+1, d+1);   // +1 で継ぎ目を消す
+    }));
+  }
+  await Promise.all(jobs);
+
+  // --- コース線 ---
+  const PX = p => { const q=world0(p.lat,p.lon); return [(q.x-x0)*scale, (q.y-y0)*scale]; };
+  const LW = W/420;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  const DASH = { expert:[], challenge:[LW*3, LW*2], kids:[LW*0.7, LW*1.6] };
+  for(const k of shown){
+    ctx.strokeStyle=COURSES[k].color;
+    ctx.lineWidth=LW;
+    ctx.setLineDash(DASH[k]||[]);
+    ctx.beginPath();
+    COURSES[k].pts.forEach((p,i)=>{ const [X,Y]=PX(p); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // --- 地点バッジ ---
+  if(document.getElementById('pv-badge').checked){
+    const BH = W/42, seen=new Set();
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(const k of shown) for(const p of poisOf(k)){
+      if(seen.has(p.id)) continue;
+      seen.add(p.id);
+      const t=POI_TYPES[p.type];
+      const [X,Y]=PX(p.courses[k]);
+      ctx.font=`700 ${BH*0.56}px "Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif`;
+      const bw2=Math.max(BH*1.45, ctx.measureText(p.code).width + BH*0.75);
+      const r=BH/2, L=X-bw2/2, T=Y-BH/2;
+      ctx.beginPath();
+      ctx.moveTo(L+r,T); ctx.lineTo(L+bw2-r,T); ctx.arcTo(L+bw2,T,L+bw2,T+r,r);
+      ctx.lineTo(L+bw2,T+BH-r); ctx.arcTo(L+bw2,T+BH,L+bw2-r,T+BH,r);
+      ctx.lineTo(L+r,T+BH); ctx.arcTo(L,T+BH,L,T+BH-r,r);
+      ctx.lineTo(L,T+r); ctx.arcTo(L,T,L+r,T,r); ctx.closePath();
+      ctx.fillStyle=t.color; ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=BH*0.13; ctx.stroke();
+      ctx.fillStyle='#fff'; ctx.fillText(p.code, X, Y+BH*0.02);
+    }
+  }
+
+  // --- 出典表示（地理院タイルの利用条件） ---
+  const credit = swapped ? '© OpenStreetMap contributors' : '出典：地理院タイル（国土地理院）';
+  ctx.font=`${W/190}px "Hiragino Kaku Gothic ProN",sans-serif`;
+  ctx.textAlign='right'; ctx.textBaseline='bottom';
+  const tw2=ctx.measureText(credit).width, pad=W/300;
+  ctx.fillStyle='rgba(255,255,255,.88)';
+  ctx.fillRect(W-tw2-pad*3, H-W/120-pad, tw2+pad*3, W/120+pad);
+  ctx.fillStyle='#333';
+  ctx.fillText(credit, W-pad*1.5, H-pad*0.6);
+
+  // --- ダウンロード ---
+  await new Promise(res=> cv.toBlob(b=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(b);
+    a.download='三田母子トレイルレース_コースマップ.png';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    res();
+  }, 'image/png'));
+}
+
+const btnPng=document.getElementById('btn-png');
+btnPng.addEventListener('click', async ()=>{
+  btnPng.disabled=true; btnPng.textContent='生成中…';
+  try{ await exportPNG(); }
+  catch(err){ alert('PNGの生成に失敗しました: '+err.message); }
+  btnPng.disabled=false; btnPng.textContent='PNG保存（A4横・高解像度）';
+});
+
+// ----- 印刷実行 --------------------------------------------------------
+const doPrint=document.getElementById('btn-doprint');
+doPrint.addEventListener('click', ()=>{
+  doPrint.disabled=true; doPrint.textContent='準備中…';
+  paintPreview();
+  whenTilesReady(()=>{
+    window.print();
+    doPrint.disabled=false; doPrint.textContent='印刷';
+  });
+});
+
+// 印刷レイアウトが適用された直後に Leaflet へサイズ変更を通知する。
+// これを呼ばないと、コース線がクリップ領域外と判定されて描画されない。
+window.addEventListener('beforeprint', ()=>{
+  if(!previewing) return;
+  roPaused = true;                        // 印刷中は ResizeObserver を止める
+  map.invalidateSize({animate:false});    // 新しいサイズを認識させる
+  const shown = ORDER.filter(k=>pvOn[k]);
+  if(shown.length){
+    map.fitBounds(L.featureGroup(shown.map(k=>lines[k])).getBounds(),
+                  {padding:[4,4], animate:false});
+  }
+  for(const k of ORDER) if(map.hasLayer(lines[k])) lines[k].redraw();
+});
+
+window.addEventListener('afterprint', ()=>{
+  roPaused = false;
+  if(previewing){ map.invalidateSize({animate:false}); paintPreview(); }
+});
 
 // ===== レイアウト切替（CSSの @media と同じ値を使う）==================
 const BREAKPOINT = 800;                     // ← CSS側の 800px と必ず揃える
@@ -476,7 +864,10 @@ function applyMode(){
 mq.addEventListener('change', applyMode);
 
 // ===== サイズ確定後に地図をフィット ==================================
+let roPaused = false;
+
 function fit(){
+  if(previewing || roPaused) return;     // プレビュー中は自動フィットしない
   const el=document.getElementById('map');
   if(!el.clientWidth || !el.clientHeight) return;
   map.invalidateSize({animate:false});
