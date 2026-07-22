@@ -245,7 +245,7 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v18</small></span>
+  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v19</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
   <span class="pvspace"></span>
@@ -284,7 +284,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v18：線幅をほぼ均一化］</b>
+      <b style="color:var(--ink)">［build v19：線幅を完全に統一］</b>
     </div>
   </div>
 </div>
@@ -440,7 +440,7 @@ map.on('click', ()=> map.scrollWheelZoom.enable());
 map.getContainer().addEventListener('mouseleave', ()=> map.scrollWheelZoom.disable());
 
 // 画面表示の線の太さ（太い順に描くので、重なっても下の線の縁が見える）
-const SCREEN_W = { expert:6, challenge:5.1, kids:4.2 };
+const SCREEN_W = { expert:6, challenge:6, kids:6 };
 
 // 3コースを常時表示（ORDER順に描くので エキスパートが下、ビギナーが上）
 const lines={};
@@ -646,9 +646,9 @@ function whenTilesReady(cb){
 // ----- プレビューの状態 -----------------------------------------------
 // すべて実線。太い順に下から重ねるので、重複区間でも下の線の縁が見える
 const PRINT_STYLE = {
-  expert:    { weight:7,   dashArray:null },
-  challenge: { weight:5.9, dashArray:null },
-  kids:      { weight:4.9, dashArray:null }
+  expert:    { weight:7, dashArray:null },
+  challenge: { weight:7, dashArray:null },
+  kids:      { weight:7, dashArray:null }
 };
 const pvOn = { expert:true, challenge:true, kids:true };
 let previewing = false;
@@ -976,7 +976,7 @@ async function buildCanvas(onProgress){
   const LW = mapW/420;
   // すべて実線。エキスパートを最も太く、ビギナーを最も細くして
   // 描画順（太い順に下）で重複区間の判別ができるようにする
-  const WEIGHT = { expert:LW*1.55, challenge:LW*1.32, kids:LW*1.09 };
+  const WEIGHT = { expert:LW*1.55, challenge:LW*1.55, kids:LW*1.55 };
   ctx.lineJoin='round'; ctx.lineCap='round';
   for(const k of shown){
     ctx.strokeStyle=COURSES[k].color;
