@@ -245,7 +245,7 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー — A4横 <small style="font-weight:400;opacity:.6">v20</small></span>
+  <span class="pvtitle">印刷プレビュー <small style="font-weight:400;opacity:.6">v21</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
   <span class="pvspace"></span>
@@ -284,7 +284,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v20：ビギナーGPX差し替え］</b>
+      <b style="color:var(--ink)">［build v21：グラフの文字サイズを幅基準に］</b>
     </div>
   </div>
 </div>
@@ -798,21 +798,37 @@ function roundRect(ctx, x, y, w, h, r){
 // 標高プロファイルを canvas に描く（画面のSVG版と同じ体裁）
 function drawProfile(ctx, k, ox, oy, w, h, showBadge){
   const c = COURSES[k];
-  const f  = Math.max(7, h*0.060);          // 基本フォント
-  const pl = ox + w*0.150, pr = ox + w*0.985;   // Y軸ラベル用に左を広く
-  const pt = oy + h*0.40,  pb = oy + h*0.74;    // バッジ行と軸ラベル用の余白
+
+  // 文字サイズはパネルの「幅」を基準にする。
+  // 高さ基準にすると、表示コース数が減ったとき（1段が高くなるとき）に
+  // 文字だけ巨大化してしまうため。
+  const f = Math.max(8, w*0.028);
+
+  const pl = ox + f*4.6, pr = ox + w*0.99;     // プロット領域の左右
+  const headerH = f*2.2;                        // コース名の行
+  const badgeH  = f*2.0;                        // 地点バッジの行
+  const footH   = f*3.6;                        // X軸の数値＋単位
+
+  // プロットの高さには上限を設ける。1コース表示のときに
+  // 縦へ引き伸ばされて起伏が誇張されるのを防ぐ。
+  const avail = h - headerH - badgeH - footH;
+  const plotH = Math.max(f*4, Math.min(avail, (pr-pl)*0.42));
+  const blockH = headerH + badgeH + plotH + footH;
+  const top = oy + Math.max(0, (h - blockH)/2);  // 縦方向は中央に置く
+
+  const pt = top + headerH + badgeH, pb = pt + plotH;
   const lo = Math.floor(c.min/50)*50, hi = Math.ceil(c.max/50)*50;
   const X  = km => pl + (km/c.total)*(pr-pl);
   const Yv = e  => pb - ((e-lo)/(hi-lo))*(pb-pt);
 
   // 見出し（色見本＋コース名）
   ctx.fillStyle = c.color;
-  roundRect(ctx, ox+w*0.005, oy+h*0.105, w*0.026, Math.max(2, h*0.022), Math.max(1, h*0.011));
+  roundRect(ctx, ox + f*0.2, top + f*0.85, f*1.5, Math.max(2, f*0.28), f*0.14);
   ctx.fill();
   ctx.fillStyle = '#17241d';
   ctx.font = `700 ${(f*1.15).toFixed(1)}px "Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText(c.label, ox + w*0.042, oy + h*0.115);
+  ctx.fillText(c.label, ox + f*2.1, top + f*1.0);
 
   // Y軸グリッド
   ctx.strokeStyle = '#d3d0c2'; ctx.lineWidth = Math.max(0.6, w/1500);
@@ -822,7 +838,7 @@ function drawProfile(ctx, k, ox, oy, w, h, showBadge){
   for(let i=0;i<=4;i++){
     const e = lo + (hi-lo)*i/4, y = Yv(e);
     ctx.beginPath(); ctx.moveTo(pl, y); ctx.lineTo(pr, y); ctx.stroke();
-    ctx.fillText(String(Math.round(e)), pl - w*0.018, y);
+    ctx.fillText(String(Math.round(e)), pl - f*0.5, y);
   }
 
   // 面と線
@@ -846,26 +862,26 @@ function drawProfile(ctx, k, ox, oy, w, h, showBadge){
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   for(let i=0;i<=5;i++){
     const km = c.total*i/5;
-    ctx.fillText(km.toFixed(1), X(km), pb + h*0.035);
+    ctx.fillText(km.toFixed(1), X(km), pb + f*0.55);
   }
 
   // 軸の単位
   ctx.font = `${(f*0.92).toFixed(1)}px "Hiragino Kaku Gothic ProN",sans-serif`;
-  ctx.fillText('距離 (km)', (pl+pr)/2, pb + h*0.145);
+  ctx.fillText('距離 (km)', (pl+pr)/2, pb + f*2.1);
   ctx.save();
-  ctx.translate(ox + w*0.032, (pt+pb)/2); ctx.rotate(-Math.PI/2);
+  ctx.translate(ox + f*0.9, (pt+pb)/2); ctx.rotate(-Math.PI/2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('標高 (m)', 0, 0);
   ctx.restore();
 
   // 地点バッジ
   if(showBadge){
-    const bh = h*0.085;
+    const bh = f*1.55;
     for(const p of poisOf(k)){
       const info = p.courses[k], t = POI_TYPES[p.type];
       const px = X(info.km);
       ctx.strokeStyle = t.color; ctx.lineWidth = Math.max(0.8, w/1300);
-      ctx.setLineDash([w/200, w/280]);
+      ctx.setLineDash([f*0.5, f*0.35]);
       ctx.beginPath(); ctx.moveTo(px, pt - bh*0.1); ctx.lineTo(px, pb); ctx.stroke();
       ctx.setLineDash([]);
       ctx.font = `700 ${(bh*0.58).toFixed(1)}px "Hiragino Kaku Gothic ProN",sans-serif`;
