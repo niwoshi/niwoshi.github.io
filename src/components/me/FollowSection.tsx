@@ -27,7 +27,7 @@ const socialLinks = [
 
 export function FollowSection() {
   return (
-    <section className="relative py-20 px-4">
+    <section className="relative pt-8 pb-20 md:py-20 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
         <motion.div
@@ -35,7 +35,7 @@ export function FollowSection() {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="flex items-center gap-4 mb-12"
+          className="flex items-center gap-4 mb-8 md:mb-12"
         >
           <div className="w-3 h-3 rounded-full bg-[#00ff88]" />
           <div className="h-px flex-1 bg-gradient-to-r from-[#00ff88] to-transparent" />

@@ -15,7 +15,7 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section className="relative min-h-[60vh] flex items-center justify-center px-4 overflow-hidden">
+    <section className="relative pt-24 pb-4 md:py-0 md:min-h-[60vh] flex items-center justify-center px-4 overflow-hidden">
       {/* Animated particles */}
       <div className="absolute inset-0">
         {mounted && [...Array(20)].map((_, i) => (
