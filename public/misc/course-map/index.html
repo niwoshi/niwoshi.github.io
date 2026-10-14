@@ -86,7 +86,25 @@
     font-size:10.5px; font-weight:700; line-height:20px; text-align:center;
     border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
     font-family:inherit; letter-spacing:.03em; white-space:nowrap;
+    /* 関門時間付きで幅が広がっても、アンカー位置を中心に保つ */
+    position:relative; left:50%; transform:translateX(-50%); width:max-content;
   }
+  /* 関門時間（バッジ右側に区切り線付きで並べる） */
+  .poi .cut{
+    margin-left:5px; padding-left:5px; border-left:1px solid rgba(255,255,255,.65);
+    font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:0;
+  }
+  .poi-lg .cut{margin-left:10px; padding-left:10px; border-left-width:2px}
+
+  /* 関門時間の表示切替（地図右上） */
+  .cutctl{
+    background:rgba(255,255,255,.93); border:1px solid var(--rule);
+    border-radius:8px; padding:7px 10px; box-shadow:0 2px 10px rgba(0,0,0,.15);
+    font-size:12px;
+  }
+  .cutctl label{display:flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap; margin:0}
+  .cutctl input{margin:0}
+  body.embed .cutctl, body.preview .cutctl{display:none}
   .pop .code{
     display:inline-block; margin-right:5px; padding:1px 6px; border-radius:9px;
     color:#fff; font-size:10px; font-weight:700; vertical-align:1px;
@@ -136,23 +154,23 @@
   .pvbar{display:none}
   body.preview{overflow:hidden}
   body.preview .pvbar{
-    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
     position:fixed; top:0; left:0; right:0; height:48px; z-index:60;
     padding:0 16px; background:#fff; border-bottom:1px solid var(--rule);
     box-shadow:0 2px 10px rgba(0,0,0,.08); font-size:12px;
   }
   .pvtitle{font-weight:700; letter-spacing:.03em}
-  .pvcourses{display:flex; gap:12px}
+  .pvcourses{display:flex; gap:9px}
   .pvchk{display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap}
   .pvchk .sw{display:inline-block; width:13px; height:3px; border-radius:2px}
   .pvspace{flex:1}
   .pvbar select{
-    font:inherit; font-size:11.5px; padding:4px 6px; border-radius:5px;
+    font:inherit; font-size:11.5px; padding:4px 4px; border-radius:5px;
     border:1px solid var(--rule); background:#fff; color:var(--ink); cursor:pointer;
   }
   .pvbar button{
     appearance:none; font:inherit; font-size:12px; font-weight:700; cursor:pointer;
-    padding:7px 15px; border-radius:6px; border:1px solid var(--ink);
+    padding:7px 12px; border-radius:6px; border:1px solid var(--ink);
     background:#fff; color:var(--ink);
   }
   .pvbar button.pri{background:var(--ink); color:#fff}
@@ -209,7 +227,7 @@
 
     /* 地図以外はすべて出さない */
     .printhead,.tabs,.hint,.actions,#stack,.aidtable,.foot,.profiles,.pvbar,
-    .leaflet-control-zoom,.leaflet-popup,.live,.leaflet-tooltip{display:none !important}
+    .leaflet-control-zoom,.leaflet-popup,.live,.leaflet-tooltip,.cutctl{display:none !important}
 
     .app{
       display:block; height:auto; min-height:0; width:auto;
@@ -245,9 +263,10 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー <small style="font-weight:400;opacity:.6">v21</small></span>
+  <span class="pvtitle">印刷プレビュー <small style="font-weight:400;opacity:.6">v22</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
+  <label class="pvchk"><input type="checkbox" class="cut-toggle" id="pv-cut" checked> 関門時間</label>
   <span class="pvspace"></span>
   <label class="pvchk">レイアウト
     <select id="png-layout">
@@ -284,7 +303,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v21：グラフの文字サイズを幅基準に］</b>
+      <b style="color:var(--ink)">［build v22：関門時間の常時表示トグルを追加］</b>
     </div>
   </div>
 </div>
@@ -356,7 +375,7 @@ const POIS = [
   { id:'atago',    name:'愛宕山下',   type:'aid', code:'A3', at:{ expert:21.79 },
     cutoff:{ expert:'14:30' } },
   { id:'fukinoto', name:'ふきのとう', type:'aid', code:'A4', at:{ expert:24.89 },
-    cutoff:{ expert:'15:00' } }
+    cutoff:{ expert:'15:30' } }
 ];
 
 // ----- 距離(km) → コース線上の座標・標高 -----------------------------
@@ -453,6 +472,19 @@ for(const k of ORDER){
 // ----- 地点マーカー -----------------------------------------------------
 const poiLayer = L.layerGroup().addTo(map);
 
+// 関門時間の常時表示（トグルで切替。初期値は表示）
+let cutoffOn = true;
+
+// 表示中コースの関門時刻をまとめる（異なる時刻があれば「／」区切り）
+function cutoffOf(p, keys){
+  const s=[];
+  for(const k of keys){
+    const i=p.courses[k];
+    if(i && i.cutoff && !s.includes(i.cutoff)) s.push(i.cutoff);
+  }
+  return s.join('／');
+}
+
 function renderPois(keys, big){
   poiLayer.clearLayers();
   const sz = big ? [64,40] : [30,20];
@@ -468,7 +500,8 @@ function renderPois(keys, big){
            + `<td style="text-align:right">${i.km.toFixed(2)} km</td>`
            + `<td style="text-align:right">${i.cutoff ? '関門 '+i.cutoff : '—'}</td></tr>`;
     }).join('');
-    const badge = p.code;
+    const cut = cutoffOn ? cutoffOf(p, keys) : '';
+    const badge = p.code + (cut ? `<span class="cut">${cut}</span>` : '');
     L.marker([p.lat, p.lon], {
       icon: L.divIcon({ className:'', iconSize:sz, iconAnchor:an, html:
         `<div class="poi${big?' poi-lg':''}" style="background:${t.color}">${badge}</div>` }),
@@ -1012,12 +1045,31 @@ async function buildCanvas(onProgress){
       seen.add(p.id);
       const t=POI_TYPES[p.type];
       const [X,Y]=PX(p.courses[k]);
-      ctx.font=`700 ${BH*0.56}px "Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif`;
-      const bw2=Math.max(BH*1.45, ctx.measureText(p.code).width + BH*0.75);
+      const cut = cutoffOn ? cutoffOf(p, shown) : '';
+      const fCode=`700 ${BH*0.56}px "Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif`;
+      const fCut =`600 ${BH*0.52}px "Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif`;
+      ctx.font=fCode; const cw=ctx.measureText(p.code).width;
+      ctx.font=fCut;  const tw=cut ? ctx.measureText(cut).width : 0;
+      const gap=BH*0.28;                                  // 区切り線の前後余白
+      const inner = cut ? cw + gap*2 + tw : cw;           // 文字部分の全幅
+      const bw2=Math.max(BH*1.45, inner + BH*0.75);
       roundRect(ctx, X-bw2/2, Y-BH/2, bw2, BH, BH/2);
       ctx.fillStyle=t.color; ctx.fill();
       ctx.strokeStyle='#fff'; ctx.lineWidth=BH*0.13; ctx.stroke();
-      ctx.fillStyle='#fff'; ctx.fillText(p.code, X, Y+BH*0.02);
+      ctx.fillStyle='#fff';
+      if(!cut){
+        ctx.font=fCode; ctx.fillText(p.code, X, Y+BH*0.02);
+      }else{
+        const x0 = X - inner/2;
+        ctx.textAlign='left';
+        ctx.font=fCode; ctx.fillText(p.code, x0, Y+BH*0.02);
+        const sx = x0 + cw + gap;                          // 区切り線
+        ctx.fillStyle='rgba(255,255,255,.65)';
+        ctx.fillRect(sx - BH*0.025, Y-BH*0.28, BH*0.05, BH*0.56);
+        ctx.fillStyle='#fff';
+        ctx.font=fCut; ctx.fillText(cut, sx + gap, Y+BH*0.02);
+        ctx.textAlign='center';
+      }
     }
   }
 
@@ -1184,6 +1236,48 @@ if(EMBED){
     });
   });
 }
+
+// ===== 関門時間の表示トグル ==========================================
+// 現在地図に出しているコース（モードごとに判定）
+function currentKeys(){
+  if(previewing) return ORDER.filter(k=>pvOn[k]);
+  if(EMBED){
+    const box=document.querySelector('.mlegend');
+    return box ? ORDER.filter(x=>box.querySelector(`input[data-c="${x}"]`).checked) : ORDER;
+  }
+  return mq.matches ? [selected] : ORDER;
+}
+function setCutoff(on){
+  cutoffOn = on;
+  document.querySelectorAll('.cut-toggle').forEach(cb=>{ cb.checked = on; });
+  if(previewing) paintPreview(); else renderPois(currentKeys());
+}
+(function buildCutoffToggle(){
+  const html = `<label><input type="checkbox" class="cut-toggle" checked> 関門時間を表示</label>`;
+  if(EMBED){
+    const box=document.querySelector('.mlegend');
+    if(box){
+      const sep=document.createElement('div');
+      sep.style.cssText='border-top:1px solid var(--rule);margin:2px 0';
+      box.appendChild(sep);
+      const w=document.createElement('div'); w.innerHTML=html;
+      box.appendChild(w.firstChild);
+    }
+  }else{
+    const ctl = L.control({position:'topright'});
+    ctl.onAdd = ()=>{
+      const div=L.DomUtil.create('div','cutctl');
+      div.innerHTML = html;
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      return div;
+    };
+    ctl.addTo(map);
+  }
+  document.querySelectorAll('.cut-toggle').forEach(cb=>{
+    cb.addEventListener('change', ()=> setCutoff(cb.checked));
+  });
+})();
 
 // ===== サイズ確定後に地図をフィット ==================================
 let roPaused = false;
