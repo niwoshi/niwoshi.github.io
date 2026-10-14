@@ -82,8 +82,8 @@
   .chart .unit{font-size:8.5px; letter-spacing:.08em; fill:var(--muted); opacity:.85}
 
   .poi{
-    min-width:24px; height:20px; padding:0 5px; border-radius:10px; color:#fff;
-    font-size:10.5px; font-weight:700; line-height:20px; text-align:center;
+    min-width:30px; height:26px; padding:0 7px; border-radius:13px; color:#fff;
+    font-size:13.5px; font-weight:700; line-height:22px; text-align:center;
     border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
     font-family:inherit; letter-spacing:.03em; white-space:nowrap;
     /* 関門時間付きで幅が広がっても、アンカー位置を中心に保つ */
@@ -91,7 +91,7 @@
   }
   /* 関門時間（バッジ右側に区切り線付きで並べる） */
   .poi .cut{
-    margin-left:5px; padding-left:5px; border-left:1px solid rgba(255,255,255,.65);
+    margin-left:6px; padding-left:6px; border-left:1px solid rgba(255,255,255,.65);
     font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:0;
   }
   .poi-lg .cut{margin-left:10px; padding-left:10px; border-left-width:2px}
@@ -263,7 +263,7 @@
 </div>
 
 <div class="pvbar" id="pvbar">
-  <span class="pvtitle">印刷プレビュー <small style="font-weight:400;opacity:.6">v22</small></span>
+  <span class="pvtitle">印刷プレビュー <small style="font-weight:400;opacity:.6">v23</small></span>
   <span class="pvcourses" id="pvcourses"></span>
   <label class="pvchk"><input type="checkbox" id="pv-badge" checked> 地点バッジ</label>
   <label class="pvchk"><input type="checkbox" class="cut-toggle" id="pv-cut" checked> 関門時間</label>
@@ -303,7 +303,7 @@
     <div class="foot">
       出典：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>（国土地理院）／
       コース図は主催者提供のGPXをもとに作成。距離・累積標高は地理院標高DEM（5mメッシュ）で再計算した実測値です。
-      <b style="color:var(--ink)">［build v22：関門時間の常時表示トグルを追加］</b>
+      <b style="color:var(--ink)">［build v23：地図バッジを拡大］</b>
     </div>
   </div>
 </div>
@@ -487,8 +487,8 @@ function cutoffOf(p, keys){
 
 function renderPois(keys, big){
   poiLayer.clearLayers();
-  const sz = big ? [64,40] : [30,20];
-  const an = big ? [32,20] : [15,10];
+  const sz = big ? [64,40] : [36,26];
+  const an = big ? [32,20] : [18,13];
   const seen=new Set();
   for(const k of keys) for(const p of poisOf(k)){
     if(seen.has(p.id)) continue;
@@ -507,7 +507,7 @@ function renderPois(keys, big){
         `<div class="poi${big?' poi-lg':''}" style="background:${t.color}">${badge}</div>` }),
       zIndexOffset: 500
     }).addTo(poiLayer)
-     .bindTooltip(`${p.code} ${p.name}`, {direction:'top', offset:[0,-13]})
+     .bindTooltip(`${p.code} ${p.name}`, {direction:'top', offset:[0,-16]})
      .bindPopup(
        `<div class="pop"><span class="code" style="background:${t.color}">${p.code}</span><b>${p.name}</b><span class="ty" style="background:${t.color}">${t.label}</span>`
        + (p.note?`<div class="note">${p.note}</div>`:'')
